@@ -1,0 +1,72 @@
+export interface Message {
+  id: string
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  images?: string[]
+  files?: FileAttachment[]
+  timestamp: number
+  thinking?: string
+  model?: string
+}
+
+export interface FileAttachment {
+  name: string
+  data: string
+  type: 'image' | 'document'
+  mimeType?: string
+}
+
+export interface Conversation {
+  id: string
+  title: string
+  messages: Message[]
+  systemPrompt?: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface ModelMetadata {
+  supportsVision: boolean
+  supportsThinking: boolean
+  contextLimit?: number
+}
+
+export interface Provider {
+  id: string
+  name: string
+  baseUrl: string
+  models: string[]
+  modelMetadata?: Record<string, ModelMetadata>
+  type?: 'chat'
+  apiType?: 'openai' | 'ollama'
+  deletable?: boolean
+  disabled?: boolean
+  useCorsProxy?: boolean
+}
+
+export interface ModelParams {
+  temperature: number
+  top_p: number
+  max_tokens: number
+  presence_penalty: number
+  frequency_penalty: number
+  thinkingEnabled?: boolean
+  thinkingLevel?: 'low' | 'medium' | 'high'
+}
+
+export interface Prompt {
+  id: string
+  name: string
+  content: string
+}
+
+export interface UIConfig {
+  fontSize: 'xs' | 'base' | 'xl'
+  chatWidth: 'compact' | 'full'
+  autoCollapseCode: boolean
+  autoHideThinking: boolean
+  corsProxyUrl?: string
+  prompts?: Prompt[]
+  theme?: 'light' | 'dark' | 'system'
+  language?: 'zh' | 'en'
+}
