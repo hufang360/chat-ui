@@ -9,6 +9,18 @@ Single HTML output (via build), double-click to open in browser and start chatti
 
 Features custom system prompts, multiple provider support, data import/export. No telemetry, no background network requests except AI API calls. Dark mode included.
 
+## Screenshots
+
+<p align="center">
+  <img src="./assets/pic1.png" width="80%" />
+</p>
+<p align="center">
+  <img src="./assets/pic2.png" width="80%" />
+</p>
+<p align="center">
+  <img src="./assets/pic3.png" width="80%" />
+</p>
+
 ---
 
 ## Features

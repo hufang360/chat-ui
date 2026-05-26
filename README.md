@@ -12,6 +12,18 @@
 无遥测，不收集任何数据，除 AI 请求外无其他网络请求。
 提供夜间模式。
 
+## 截图
+
+<p align="center">
+  <img src="./assets/pic1.png" width="80%" />
+</p>
+<p align="center">
+  <img src="./assets/pic2.png" width="80%" />
+</p>
+<p align="center">
+  <img src="./assets/pic3.png" width="80%" />
+</p>
+
 ---
 
 ## 功能点
