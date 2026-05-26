@@ -33,6 +33,7 @@ import {
   Cpu,
   User,
   Bot,
+  AlertCircle,
   PanelLeftOpen,
   PanelLeftClose,
   Globe,
@@ -117,6 +118,7 @@ export function ChatArea({
   const [thinkingMenuOpen, setThinkingMenuOpen] = useState(false)
   const [streamingThinkingExpanded, setStreamingThinkingExpanded] = useState(!autoHideThinking)
   const [expandedThinkingIds, setExpandedThinkingIds] = useState<Set<string>>(new Set())
+  const [expandedErrorIds, setExpandedErrorIds] = useState<Set<string>>(new Set())
   const [modelSearch, setModelSearch] = useState('')
   const [modelSelectOpen, setModelSelectOpen] = useState(false)
 
@@ -146,12 +148,12 @@ export function ChatArea({
     return providers
       .filter(p => {
         if (p.disabled) return false
-        // 本地供应商（ollama、lmstudio）不需要 API Key
+        // 本地供应商（ollama、lmstudio）或允许空 API Key 的供应商不需要 API Key
         const isLocalProvider = p.apiType === 'ollama' || p.id === 'lmstudio'
         const apiKey = apiKeys[p.id]
         const hasApiKey = apiKey && apiKey.trim() !== ''
         const hasBaseUrl = p.baseUrl && p.baseUrl.trim() !== ''
-        return (hasApiKey || isLocalProvider) && hasBaseUrl
+        return (hasApiKey || isLocalProvider || p.allowEmptyApiKey) && hasBaseUrl
       })
       .map(p => ({
         provider: p.id,
@@ -190,7 +192,7 @@ export function ChatArea({
 
     const apiKey = getApiKey()
     const isLocalProvider = provider?.apiType === 'ollama' || provider?.id === 'lmstudio'
-    if ((!apiKey && !isLocalProvider) || !provider) {
+    if ((!apiKey && !isLocalProvider && !provider?.allowEmptyApiKey) || !provider) {
       onShowSettings()
       return
     }
@@ -200,8 +202,7 @@ export function ChatArea({
       return
     }
 
-    // 纯图片发送时使用默认文本，避免空 content
-    const finalContent = input || t('analyzeImages')
+    const finalContent = input
     const imageUrls = images.map(img => img.data)
     setInput('')
     setImages([])
@@ -300,7 +301,7 @@ export function ChatArea({
     const provider = getProvider()
     const apiKey = getApiKey()
     const isLocalProvider = provider?.apiType === 'ollama' || provider?.id === 'lmstudio'
-    if ((!apiKey && !isLocalProvider) || !provider) {
+    if ((!apiKey && !isLocalProvider && !provider?.allowEmptyApiKey) || !provider) {
       onShowSettings()
       return
     }
@@ -373,7 +374,7 @@ export function ChatArea({
   const displayPrompt = currentConversation?.systemPrompt ?? globalSystemPrompt
 
   return (
-    <div className="flex-1 flex flex-col">
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       {/* 顶部栏 */}
       <div className="h-8 border-b flex items-center p-2 shrink-0">
         <div className="flex items-center gap-0.5">
@@ -427,7 +428,7 @@ export function ChatArea({
         <div className="flex-1" />
         <div className="flex items-center gap-0.5">
           <Tooltip>
-            <TooltipTrigger render={<Button size="icon" variant="ghost" className="size-6" onClick={onToggleChatWidth} />}>
+            <TooltipTrigger render={<Button size="icon" variant="ghost" className="size-6 hidden md:inline-flex" onClick={onToggleChatWidth} />}>
               {chatWidth === 'compact' ? <UnfoldHorizontal data-icon className="size-3" /> : <FoldHorizontal data-icon className="size-3" />}
             </TooltipTrigger>
             <TooltipContent side="bottom" className="text-2xs px-2 py-1">
@@ -436,7 +437,7 @@ export function ChatArea({
           </Tooltip>
           {onThemeToggle && (
             <Tooltip>
-              <TooltipTrigger render={<Button size="icon" variant="ghost" className="size-6" onClick={onThemeToggle} />}>
+              <TooltipTrigger render={<Button size="icon" variant="ghost" className="size-6 hidden md:inline-flex" onClick={onThemeToggle} />}>
                 {themeIcon}
               </TooltipTrigger>
               <TooltipContent side="bottom" className="text-2xs px-2 py-1">
@@ -445,7 +446,7 @@ export function ChatArea({
             </Tooltip>
           )}
           <Tooltip>
-            <TooltipTrigger render={<Button size="icon" variant="ghost" className="size-6" onClick={() => setLanguage(uiConfig.language === 'en' ? 'zh' : 'en')} />}>
+            <TooltipTrigger render={<Button size="icon" variant="ghost" className="size-6 hidden md:inline-flex" onClick={() => setLanguage(uiConfig.language === 'en' ? 'zh' : 'en')} />}>
               <Globe data-icon className="size-3" />
             </TooltipTrigger>
             <TooltipContent side="bottom" className="text-2xs px-2 py-1">
@@ -545,57 +546,85 @@ export function ChatArea({
                     </div>
                   ) : (
                     <div className="flex flex-col gap-2 max-w-[calc(100%-4rem)]">
-                      <div className={`rounded-md px-3 py-2 ${fontSizeClass} bg-muted text-foreground break-words`}>
-                        {message.images && message.images.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mb-1">
-                            {message.images.map((img, i) => <img key={i} src={img} alt="" className="max-w-[80px] max-h-[80px] rounded" />)}
-                          </div>
-                        )}
-                        {message.files && message.files.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mb-2">
-                            {message.files.map((file, i) => (
-                              <div key={i} className="flex items-center gap-1 bg-muted px-2 py-1 rounded text-xs border">
-                                <ImageIcon className="size-3 shrink-0" />
-                                <span className="max-w-[150px] truncate">{file.name}</span>
-                                <button onClick={() => { const a = document.createElement('a'); a.href = file.data; a.download = file.name; a.click() }} className="hover:text-primary transition-colors"><DownloadIcon className="size-2.5" /></button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        {message.thinking && (
-                          <div className="mb-2 pb-2 border-b border-muted-foreground/20">
-                            <button
-                              onClick={() => {
-                                setExpandedThinkingIds(prev => {
-                                  const next = new Set(prev)
-                                  if (next.has(message.id)) {
-                                    next.delete(message.id)
-                                  } else {
-                                    next.add(message.id)
-                                  }
-                                  return next
-                                })
-                              }}
-                              className="flex items-center gap-1 text-2xs text-muted-foreground mb-1 hover:text-foreground transition-colors"
-                            >
-                              <Brain className="size-2.5" />
-                              <span>{t('thinkingProcess')}</span>
-                              <span className="ml-auto">{expandedThinkingIds.has(message.id) ? '▼' : '▶'}</span>
-                            </button>
-                            {expandedThinkingIds.has(message.id) && (
-                              <div className="relative pl-2">
-                                <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-thinking rounded-full"></div>
-                                <div className={`markdown-body ${fontSizeClass} text-xs`}>{formatContent(message.thinking)}</div>
+                      <div className={`rounded-md px-3 py-2 ${fontSizeClass} break-words ${message.isError ? 'bg-destructive/10 text-destructive border border-destructive/20' : 'bg-muted text-foreground'}`}>
+                        {message.isError ? (
+                          <>
+                            <div className="flex items-center gap-1 text-2xs font-medium mb-1">
+                              <AlertCircle className="size-3" />
+                              <span>{t('errorMessage')}</span>
+                            </div>
+                            {message.content.includes('\n\n') ? (
+                              <>
+                                <div className={`whitespace-pre-wrap ${expandedErrorIds.has(message.id) ? '' : 'line-clamp-1'}`}>{message.content}</div>
+                                <button
+                                  onClick={() => setExpandedErrorIds(prev => {
+                                    const next = new Set(prev)
+                                    next.has(message.id) ? next.delete(message.id) : next.add(message.id)
+                                    return next
+                                  })}
+                                  className="text-2xs text-destructive/70 hover:text-destructive mt-1 transition-colors"
+                                >
+                                  {expandedErrorIds.has(message.id) ? t('collapseError') : t('expandError')}
+                                </button>
+                              </>
+                            ) : (
+                              <div className="whitespace-pre-wrap">{message.content}</div>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            {message.images && message.images.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mb-1">
+                                {message.images.map((img, i) => <img key={i} src={img} alt="" className="max-w-[80px] max-h-[80px] rounded" />)}
                               </div>
                             )}
-                          </div>
+                            {message.files && message.files.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mb-2">
+                                {message.files.map((file, i) => (
+                                  <div key={i} className="flex items-center gap-1 bg-muted px-2 py-1 rounded text-xs border">
+                                    <ImageIcon className="size-3 shrink-0" />
+                                    <span className="max-w-[150px] truncate">{file.name}</span>
+                                    <button onClick={() => { const a = document.createElement('a'); a.href = file.data; a.download = file.name; a.click() }} className="hover:text-primary transition-colors"><DownloadIcon className="size-2.5" /></button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {message.thinking && (
+                              <div className="mb-2 pb-2 border-b border-muted-foreground/20">
+                                <button
+                                  onClick={() => {
+                                    setExpandedThinkingIds(prev => {
+                                      const next = new Set(prev)
+                                      if (next.has(message.id)) {
+                                        next.delete(message.id)
+                                      } else {
+                                        next.add(message.id)
+                                      }
+                                      return next
+                                    })
+                                  }}
+                                  className="flex items-center gap-1 text-2xs text-muted-foreground mb-1 hover:text-foreground transition-colors"
+                                >
+                                  <Brain className="size-2.5" />
+                                  <span>{t('thinkingProcess')}</span>
+                                  <span className="ml-auto">{expandedThinkingIds.has(message.id) ? '▼' : '▶'}</span>
+                                </button>
+                                {expandedThinkingIds.has(message.id) && (
+                                  <div className="relative pl-2">
+                                    <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-thinking rounded-full"></div>
+                                    <div className={`markdown-body ${fontSizeClass} text-xs`}>{formatContent(message.thinking)}</div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            <div className={`markdown-body ${fontSizeClass}`}>{formatContent(message.content)}</div>
+                          </>
                         )}
-                        <div className={`markdown-body ${fontSizeClass}`}>{formatContent(message.content)}</div>
                       </div>
                       <div className="flex items-center justify-left gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <div className="flex items-center gap-0.5">
-                          <Button size="icon" variant="ghost" className="size-5" onClick={() => handleCopyMessage(message.content)}><Copy data-icon className="size-2.5" /></Button>
-                          <Button size="icon" variant="ghost" className="size-5" onClick={() => handleStartEdit(message)}><Edit2 data-icon className="size-2.5" /></Button>
+                          {!message.isError && <Button size="icon" variant="ghost" className="size-5" onClick={() => handleCopyMessage(message.content)}><Copy data-icon className="size-2.5" /></Button>}
+                          {!message.isError && <Button size="icon" variant="ghost" className="size-5" onClick={() => handleStartEdit(message)}><Edit2 data-icon className="size-2.5" /></Button>}
                           {(message.role === 'assistant' || message.role === 'user') && (
                             <Button size="icon" variant="ghost" className="size-5" onClick={() => handleRegenerate(message)} disabled={isLoading}><RefreshCw data-icon className="size-2.5" /></Button>
                           )}

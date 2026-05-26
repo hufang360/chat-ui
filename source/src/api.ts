@@ -1,4 +1,5 @@
 import type { ModelParams } from './types'
+import i18n from './i18n'
 
 export interface StreamOptions {
   baseUrl: string
@@ -20,10 +21,23 @@ export interface StreamOptions {
 // 构建 API URL，支持 CORS 代理
 function buildApiUrl(baseUrl: string, useCorsProxy?: boolean, corsProxyUrl?: string): string {
   if (useCorsProxy && corsProxyUrl) {
-    // 代理URL后直接跟完整的基础URL（包含协议）
     return `${corsProxyUrl}/${baseUrl}`
   }
   return baseUrl
+}
+
+function getHttpErrorSummary(status: number): string {
+  if (status === 400) return i18n.t('error400')
+  if (status === 401) return i18n.t('error401')
+  if (status === 403) return i18n.t('error403')
+  if (status === 404) return i18n.t('error404')
+  if (status === 429) return i18n.t('error429')
+  if (status >= 500) return i18n.t('errorServer')
+  return i18n.t('errorHttpFailed', { code: status })
+}
+
+function formatError(summary: string, ...details: string[]): string {
+  return summary + '\n\n' + details.filter(Boolean).join('\n')
 }
 
 export async function streamChat(options: StreamOptions) {
@@ -53,7 +67,6 @@ export async function streamChat(options: StreamOptions) {
           body.thinking = {
             type: 'enabled'
           }
-          // 中高等级添加 reasoning_effort 参数
           if (modelParams.thinkingLevel === 'medium' || modelParams.thinkingLevel === 'high') {
             body.reasoning_effort = modelParams.thinkingLevel
           }
@@ -66,7 +79,6 @@ export async function streamChat(options: StreamOptions) {
         body.thinking = {
           type: 'enabled'
         }
-        // 中高等级添加 reasoning_effort 参数
         if (modelParams.thinkingLevel === 'medium' || modelParams.thinkingLevel === 'high') {
           body.reasoning_effort = modelParams.thinkingLevel
         }
@@ -88,13 +100,26 @@ export async function streamChat(options: StreamOptions) {
     })
 
     if (!response.ok) {
-      throw new Error(`API 错误: ${response.status} ${response.statusText}`)
+      let detail = ''
+      try {
+        const errorBody = await response.text()
+        const errorJson = JSON.parse(errorBody)
+        detail = errorJson.error?.message || errorJson.message || errorBody.slice(0, 500)
+      } catch {
+        // 无法解析错误体
+      }
+
+      const lines: string[] = [`${response.status} ${response.statusText}`]
+      if (detail) lines.push(detail)
+      lines.push(`${i18n.t('errorRequestUrl')}: ${apiBaseUrl}/chat/completions`)
+      throw new Error(formatError(getHttpErrorSummary(response.status), ...lines))
     }
 
     const reader = response.body?.getReader()
     if (!reader) throw new Error('Failed to get response stream')
 
     const decoder = new TextDecoder()
+    let currentEventType = ''
 
     while (true) {
       const { done, value } = await reader.read()
@@ -104,35 +129,64 @@ export async function streamChat(options: StreamOptions) {
       const lines = chunk.split('\n')
 
       for (const line of lines) {
-        const dataLine = line.trim()
-        if (!dataLine || dataLine === 'data: [DONE]') continue
+        const trimmed = line.trim()
 
-        if (dataLine.startsWith('data: ')) {
+        if (trimmed.startsWith('event: ')) {
+          currentEventType = trimmed.slice(7)
+          continue
+        }
+
+        if (!trimmed || trimmed === 'data: [DONE]') continue
+
+        if (trimmed.startsWith('data: ')) {
           try {
-            const data = JSON.parse(dataLine.slice(6))
+            const data = JSON.parse(trimmed.slice(6))
+
+            if (currentEventType === 'error' || data.error) {
+              const errorMsg = data.error?.message || data.message || JSON.stringify(data.error || data)
+              throw new Error(errorMsg)
+            }
+
             const delta = data.choices?.[0]?.delta
 
-            // 处理思考内容 (DeepSeek 格式)
             const reasoningContent = delta?.reasoning_content || delta?.reasoning
             if (reasoningContent) {
               options.onThinkingChunk?.(reasoningContent)
             }
 
-            // 处理普通内容
             const content = delta?.content
             if (content) {
               onChunk(content)
             }
           } catch (e) {
-            // 忽略解析错误
+            if (!(e instanceof SyntaxError)) throw e
           }
+          currentEventType = ''
         }
       }
     }
 
     onComplete()
   } catch (error) {
-    onError(error as Error)
+    const err = error as Error
+    if (err.name === 'AbortError') {
+      onError(err)
+      return
+    }
+    if (err.name === 'TypeError' && /fetch/i.test(err.message)) {
+      const url = buildApiUrl(baseUrl, useCorsProxy, corsProxyUrl)
+      const t = i18n.t.bind(i18n)
+      const summary = !navigator.onLine
+        ? t('errorOffline')
+        : /localhost|127\.0\.0\.1|0\.0\.0\.0/.test(url)
+          ? t('errorLocalHint')
+          : t('errorNetworkHint')
+      onError(new Error(formatError(summary,
+        `${err.name}: ${err.message}`,
+        `${t('errorRequestUrl')}: ${url}/chat/completions`,
+      )))
+    } else {
+      onError(err)
+    }
   }
 }
-

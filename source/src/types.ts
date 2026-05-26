@@ -7,6 +7,7 @@ export interface Message {
   timestamp: number
   thinking?: string
   model?: string
+  isError?: boolean
 }
 
 export interface FileAttachment {
@@ -28,7 +29,7 @@ export interface Conversation {
 export interface ModelMetadata {
   supportsVision: boolean
   supportsThinking: boolean
-  contextLimit?: number
+  contextLength?: number
 }
 
 export interface Provider {
@@ -42,6 +43,10 @@ export interface Provider {
   deletable?: boolean
   disabled?: boolean
   useCorsProxy?: boolean
+  allowEmptyApiKey?: boolean
+  consoleUrl?: string
+  apiKeyHint?: string
+  apiUrlHint?: string
 }
 
 export interface ModelParams {

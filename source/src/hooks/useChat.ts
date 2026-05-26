@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react'
 import { useStore } from '../store'
 import { streamChat } from '../api'
+import { toast } from 'sonner'
 import i18n from '../i18n'
 
 export interface ImageFile {
@@ -60,7 +61,21 @@ export function useChat() {
     const apiKey = getApiKey()
     // Ollama / LM Studio 等本地服务不需要 API Key
     const isLocalProvider = provider?.apiType === 'ollama' || provider?.id === 'lmstudio'
-    if ((!apiKey && !isLocalProvider) || !provider) return false
+    if ((!apiKey && !isLocalProvider && !provider?.allowEmptyApiKey) || !provider) return false
+
+    const modelMetadata = provider.modelMetadata?.[selectedModel]
+    const supportsVision = modelMetadata?.supportsVision || false
+    const modelSupportsThinking = modelMetadata?.supportsThinking || false
+
+    // 视觉检查：新图片或历史消息含图片，但模型不支持 → 拦截（在 addMessage 之前）
+    const preCheck = getCurrentConversation()
+    const hasExistingImages = preCheck?.messages?.some(m =>
+      (m.images && m.images.length > 0) || m.files?.some(f => f.type === 'image')
+    )
+    if ((imageDataUrls.length > 0 || hasExistingImages) && !supportsVision) {
+      toast.error(i18n.t('modelNotSupportImage'))
+      return false
+    }
 
     addMessage({ role: 'user', content, images: imageDataUrls })
     setIsLoading(true)
@@ -73,10 +88,6 @@ export function useChat() {
     const conversation = getCurrentConversation()
     const systemPrompt = conversation?.systemPrompt ?? globalSystemPrompt
     const apiMessages = buildApiMessages(conversation?.messages || [])
-
-    // 检查模型是否支持思考
-    const modelMetadata = provider.modelMetadata?.[selectedModel]
-    const modelSupportsThinking = modelMetadata?.supportsThinking || false
 
     const finalModelParams = {
       ...storeModelParams,
@@ -119,13 +130,17 @@ export function useChat() {
           return
         }
         if (streamingConversationIdRef.current === currentConversationId) {
-          const errorContent = i18n.t('errorPrefix', { message: error.message })
-          streamingRef.current = errorContent
-          setStreamingContent(errorContent)
-        } else {
-          setStreamingContent('')
-          streamingRef.current = ''
+          addMessage({
+            role: 'assistant',
+            content: error.message,
+            model: selectedModel,
+            isError: true,
+          })
         }
+        setStreamingContent('')
+        setStreamingThinking('')
+        streamingRef.current = ''
+        streamingThinkingRef.current = ''
         setIsLoading(false)
         abortControllerRef.current = null
         streamingConversationIdRef.current = null
@@ -180,16 +195,28 @@ export function useChat() {
     const apiKey = getApiKey()
     // Ollama / LM Studio 等本地服务不需要 API Key
     const isLocalProvider = provider?.apiType === 'ollama' || provider?.id === 'lmstudio'
-    if ((!apiKey && !isLocalProvider) || !provider) return false
+    if ((!apiKey && !isLocalProvider && !provider?.allowEmptyApiKey) || !provider) return false
 
     const conversation = getCurrentConversation()
     const messages = conversation?.messages || []
+    const contextMessages = messages.slice(0, messageIndex)
+
+    const modelMetadata = provider.modelMetadata?.[selectedModel]
+    const supportsVision = modelMetadata?.supportsVision || false
+    const modelSupportsThinking = modelMetadata?.supportsThinking || false
+
+    // 对话包含图片但模型不支持视觉时，提前拦截（检查全部消息，包括待删除的）
+    const hasImages = messages.some(m =>
+      (m.images && m.images.length > 0) || m.files?.some(f => f.type === 'image')
+    )
+    if (hasImages && !supportsVision) {
+      toast.error(i18n.t('modelNotSupportImage'))
+      return false
+    }
+
     // 删除从 messageIndex 开始的所有后续消息（包括失败的回复）
     const messagesToDelete = messages.slice(messageIndex)
     messagesToDelete.forEach(m => deleteMessage(m.id))
-
-    // 用截断后的消息列表作为上下文重新请求
-    const contextMessages = messages.slice(0, messageIndex)
 
     setIsLoading(true)
     setStreamingContent('')
@@ -200,10 +227,6 @@ export function useChat() {
 
     const systemPrompt = conversation?.systemPrompt ?? globalSystemPrompt
     const apiMessages = buildApiMessages(contextMessages)
-
-    // 检查模型是否支持思考
-    const modelMetadata = provider.modelMetadata?.[selectedModel]
-    const modelSupportsThinking = modelMetadata?.supportsThinking || false
 
     const finalModelParams = {
       ...storeModelParams,
@@ -246,13 +269,17 @@ export function useChat() {
           return
         }
         if (streamingConversationIdRef.current === currentConversationId) {
-          const errorContent = i18n.t('errorPrefix', { message: error.message })
-          streamingRef.current = errorContent
-          setStreamingContent(errorContent)
-        } else {
-          setStreamingContent('')
-          streamingRef.current = ''
+          addMessage({
+            role: 'assistant',
+            content: error.message,
+            model: selectedModel,
+            isError: true,
+          })
         }
+        setStreamingContent('')
+        setStreamingThinking('')
+        streamingRef.current = ''
+        streamingThinkingRef.current = ''
         setIsLoading(false)
         abortControllerRef.current = null
         streamingConversationIdRef.current = null

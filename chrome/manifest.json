@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "Chat UI",
+  "version": "1.0.0",
+  "description": "AI 聊天助手，支持多种 LLM API",
+  "action": {
+    "default_title": "Chat UI",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "host_permissions": [
+    "http://localhost:*/*",
+    "https://api.openai.com/*",
+    "https://api.deepseek.com/*",
+    "https://api.moonshot.cn/*",
+    "https://api.siliconflow.cn/*",
+    "https://api.groq.com/*",
+    "https://api.xiaomimimo.com/*",
+    "https://openrouter.ai/*",
+    "https://open.bigmodel.cn/*",
+    "https://dashscope.aliyuncs.com/*",
+    "https://api-inference.modelscope.cn/*"
+  ]
+}

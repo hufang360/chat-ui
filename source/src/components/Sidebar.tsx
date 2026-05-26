@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useStore } from '../store'
+import { APP_VERSION } from '../constants.base'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -10,6 +11,8 @@ import {
   MessageSquare,
   Copy,
   Bird,
+  Settings,
+  PanelLeftClose,
 } from 'lucide-react'
 
 // 弹出层垂直偏移，对应 spacing-2 (0.5rem = 8px)
@@ -20,6 +23,8 @@ export interface SidebarProps {
   onPopoverConfirm?: (x: number, y: number, onConfirm: () => void) => void
   onStopAndSwitchConversation: (id: string) => void
   onStopAndCreateConversation: () => void
+  onOpenSettings: () => void
+  onCloseSidebar: () => void
 }
 
 export function Sidebar({
@@ -27,6 +32,8 @@ export function Sidebar({
   onPopoverConfirm,
   onStopAndSwitchConversation,
   onStopAndCreateConversation,
+  onOpenSettings,
+  onCloseSidebar,
 }: SidebarProps) {
   const {
     conversations,
@@ -45,7 +52,7 @@ export function Sidebar({
 
   return (
     <div
-      className={`${sidebarOpen ? 'w-56' : 'w-0'} border-r flex flex-col transition-all duration-200 overflow-hidden`}
+      className={`${sidebarOpen ? 'w-full md:w-56' : 'w-0'} border-r flex flex-col transition-all duration-200 overflow-hidden shrink-0 md:shrink h-full`}
     >
         <div className="h-8 p-2 border-b flex items-center justify-between shrink-0">
         <div className="flex items-center gap-0.5">
@@ -61,10 +68,18 @@ export function Sidebar({
               {t('newConversation')}
             </TooltipContent>
           </Tooltip>
+          <Tooltip>
+            <TooltipTrigger render={<Button size="icon" variant="ghost" className="size-6 md:hidden" onClick={onCloseSidebar} />}>
+              <PanelLeftClose data-icon className="size-3" />
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-2xs px-2 py-1">
+              {t('collapseSidebar')}
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-1 flex flex-col gap-0.5">
+      <div className="flex-1 min-h-0 overflow-y-auto p-1 flex flex-col gap-0.5">
         {conversations.map(conv => (
           <div
             key={conv.id}
@@ -86,7 +101,7 @@ export function Sidebar({
                 dragGhostRef.current = null
               }
             }}
-            onClick={() => onStopAndSwitchConversation(conv.id)}
+            onClick={() => { onStopAndSwitchConversation(conv.id); if (window.innerWidth < 768) onCloseSidebar() }}
           >
             {sidebarOpen ? (
               <>
@@ -154,6 +169,19 @@ export function Sidebar({
             )}
           </div>
         ))}
+      </div>
+
+      {/* 底部设置按钮 */}
+      <div className="shrink-0 border-t p-1.5">
+        <div className="flex items-center">
+          <Button variant="ghost" size="sm" className="flex-1 justify-start text-xs h-7 gap-1.5"
+            onClick={onOpenSettings}
+          >
+            <Settings data-icon="inline-start" className="size-3 shrink-0" />
+            <span className="truncate">{t('settings')}</span>
+          </Button>
+          <span className="shrink-0 text-[10px] text-muted-foreground/50 px-1.5 select-none">v{APP_VERSION}</span>
+        </div>
       </div>
     </div>
   )

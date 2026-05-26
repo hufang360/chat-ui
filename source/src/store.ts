@@ -339,17 +339,44 @@ export const useStore = create<StoreState>()(
 
       exportConfig: () => {
         const state = get()
-        const config = {
-          providers: state.providers,
-          apiKeys: state.apiKeys,
-        }
+        const stripKeys = ['consoleUrl', 'apiKeyHint', 'apiUrlHint'] as const
+        const providers = state.providers.map(p => {
+          const cleaned = { ...p }
+          for (const k of stripKeys) delete cleaned[k]
+          return cleaned
+        })
+        const config = { providers, apiKeys: state.apiKeys }
         return JSON.stringify(config, null, 2)
       },
 
       importConfig: (configString) => {
         try {
           const config = JSON.parse(configString)
-          if (config.providers) set({ providers: config.providers })
+          if (config.providers) {
+            const importedIds = new Set<string>()
+            const providers = (config.providers as Record<string, unknown>[]).map(imported => {
+              const preset = DEFAULT_PROVIDERS_WITH_FLAGS.find(d => d.id === imported.id)
+              const cleaned = { ...imported }
+              delete cleaned.consoleUrl
+              delete cleaned.apiKeyHint
+              delete cleaned.apiUrlHint
+              if (typeof imported.id === 'string') importedIds.add(imported.id)
+              return {
+                ...cleaned,
+                allowEmptyApiKey: cleaned.allowEmptyApiKey ?? false,
+                ...(preset ? {
+                  consoleUrl: preset.consoleUrl,
+                  apiKeyHint: preset.apiKeyHint,
+                  apiUrlHint: preset.apiUrlHint,
+                } : {}),
+              } as Provider
+            })
+            // 补齐缺失的预设供应商
+            for (const preset of DEFAULT_PROVIDERS_WITH_FLAGS) {
+              if (!importedIds.has(preset.id)) providers.push(preset)
+            }
+            set({ providers })
+          }
           if (config.apiKeys) set({ apiKeys: config.apiKeys })
           return true
         } catch {

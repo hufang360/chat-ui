@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useStore } from './store'
+import { APP_VERSION } from './constants.base'
 import { useChat } from './hooks/useChat'
 import { TooltipProvider } from './components/ui/tooltip'
 import { Toaster, toast } from 'sonner'
@@ -30,7 +31,15 @@ function App() {
 
   // 状态
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 768)
+
+  // 移动端（<768px）自动隐藏侧栏
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)')
+    const handler = (e: MediaQueryListEvent) => setSidebarOpen(!e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
   const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; title: string; message: string; onConfirm: () => void }>({
     open: false, title: '', message: '', onConfirm: () => {}
   })
@@ -121,7 +130,7 @@ function App() {
   // 导出所有配置为 JSON 文件
   const handleExportData = () => {
     const data = {
-      version: '1.0.0',
+      version: APP_VERSION,
       exportTime: new Date().toISOString(),
       conversations,
       providers: useStore.getState().providers,
@@ -180,6 +189,8 @@ function App() {
           onPopoverConfirm={showPopoverConfirm}
           onStopAndSwitchConversation={handleStopAndSwitch}
           onStopAndCreateConversation={handleStopAndCreate}
+          onOpenSettings={() => setSettingsOpen(true)}
+          onCloseSidebar={() => setSidebarOpen(false)}
         />
 
         {/* 聊天区域 */}
