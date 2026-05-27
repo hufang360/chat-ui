@@ -1,13 +1,26 @@
 <p align="center">
   <a href="./README.md">简体中文</a> ·
-  <a href="./README.en.md"><strong>English</strong></a> ·
+  <a href="./README.en.md"><strong>English</strong></a>
 </p>
 
-A minimalist Chatbot widget. 99% vibe coding result.
+A lightweight Chatbot — a single HTML file is all you need.
+Download: [./dist/index.html](./dist/index.html)
+Double-click to launch, no install, no server, no complex deployment — just open in your browser and start chatting.
+Built with 99% vibe coding, simple yet powerful.
 
-Single HTML output (via build), double-click to open in browser and start chatting.
+Bring your own API key, supports OpenAI-compatible API endpoints.
+Customizable system prompts, switch between multiple providers. Data import/export supported.
+No telemetry, no data collection, no network requests except AI calls.
+Dark mode included.
 
-Features custom system prompts, multiple provider support, data import/export. No telemetry, no background network requests except AI API calls. Dark mode included.
+## Highlights
+- Ultra-lightweight deployment: single HTML file, copy-and-go, works offline (except for AI requests).
+- Flexible LLM integration: BYOK, OpenAI-compatible API, one-click provider switching.
+- Fully customizable system prompts: define any persona or conversation style.
+- Your data, your control: import/export conversations anytime for backup or migration.
+- Zero-compromise privacy: no telemetry, no data collection — network requests only when you chat.
+- Dark mode: easier on the eyes at night.
+- HashTag: pass parameters via URL for quick chat, prompt activation, or provider import.
 
 ## Screenshots
 

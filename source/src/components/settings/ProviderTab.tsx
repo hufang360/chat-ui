@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useStore } from '../../store'
 import type { ModelMetadata, Provider } from '../../types'
-import { MODEL_CAPABILITIES } from '../../constants'
+import { MODEL_CAPABILITIES, DEFAULT_PROVIDERS_WITH_FLAGS } from '../../constants'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
@@ -14,16 +14,17 @@ import { POPOVER_OFFSET, formatTimeAgo } from '../../utils/settingsUtils'
 import {
   Plus, Trash2, Upload, Download, Eye, EyeOff, Brain, Lightbulb,
   Edit2, Check, CloudDownload, GripVertical, X, Search, ChevronLeft, ChevronRight, History,
-  ExternalLink,
+  ExternalLink, RotateCcw, Hash,
 } from 'lucide-react'
 
 export interface ProviderTabProps {
   onShowPopoverConfirm: (x: number, y: number, onConfirm: () => void) => void
   configImportInputRef: React.RefObject<HTMLInputElement | null>
   onEditModel: (model: string, providerId: string) => void
+  initialProviderId?: string
 }
 
-export function ProviderTab({ onShowPopoverConfirm, configImportInputRef, onEditModel }: ProviderTabProps) {
+export function ProviderTab({ onShowPopoverConfirm, configImportInputRef, onEditModel, initialProviderId }: ProviderTabProps) {
   const {
     providers,
     apiKeys,
@@ -74,10 +75,12 @@ export function ProviderTab({ onShowPopoverConfirm, configImportInputRef, onEdit
 
   // 初始化选中的供应商
   useEffect(() => {
-    if (providers.length > 0 && !providers.find(p => p.id === selectedProviderId)) {
+    if (initialProviderId && providers.find(p => p.id === initialProviderId)) {
+      setSelectedProviderId(initialProviderId)
+    } else if (providers.length > 0 && !providers.find(p => p.id === selectedProviderId)) {
       setSelectedProviderId(providers[0].id)
     }
-  }, [providers])
+  }, [providers, initialProviderId])
 
   // 切换供应商时重置
   useEffect(() => {
@@ -170,7 +173,7 @@ export function ProviderTab({ onShowPopoverConfirm, configImportInputRef, onEdit
     const provider = providers.find(p => p.id === providerId)
     const apiKey = apiKeys[providerId]
     if (!provider || !apiKey) {
-      if (!silent) toast(t('pleaseConfigureApiKey'))
+      if (!silent) toast.warning(t('pleaseConfigureApiKey'))
       return
     }
 
@@ -265,9 +268,9 @@ export function ProviderTab({ onShowPopoverConfirm, configImportInputRef, onEdit
         const content = ev.target?.result as string
         JSON.parse(content)
         importConfig(content)
-        toast(t('configImportSuccess'))
+        toast.success(t('configImportSuccess'))
       } catch (error) {
-        toast(t('configImportFailed', { error: error instanceof Error ? error.message : 'Unknown error' }))
+        toast.error(t('configImportFailed', { error: error instanceof Error ? error.message : 'Unknown error' }))
       }
     }
     reader.readAsText(file)
@@ -286,9 +289,11 @@ export function ProviderTab({ onShowPopoverConfirm, configImportInputRef, onEdit
         <div className="flex items-center justify-between mb-2">
           <Label className="text-xs font-medium text-muted-foreground">{t('provider')}</Label>
           <Tooltip>
-            <TooltipTrigger render={<Button size="icon" variant="ghost" className="size-5" onClick={handleAddProvider} />}>
-              <Plus data-icon className="size-3" />
-            </TooltipTrigger>
+            <TooltipTrigger render={(props) => (
+              <Button {...props} size="icon" variant="ghost" className="size-5" onClick={handleAddProvider}>
+                <Plus className="size-3" />
+              </Button>
+            )} />
             <TooltipContent side="top" className="text-2xs px-2 py-1">{t('addProvider')}</TooltipContent>
           </Tooltip>
         </div>
@@ -336,12 +341,22 @@ export function ProviderTab({ onShowPopoverConfirm, configImportInputRef, onEdit
           ))}
         </div>
         {/* 导入/导出配置 */}
-        <div className="shrink-0 pt-2 border-t flex gap-1">
-          <Button size="sm" variant="outline" className="flex-1 h-6 text-2xs" onClick={() => configImportInputRef.current?.click()}>
-            <Upload data-icon="inline-start" className="size-2.5 mr-0.5" />{t('import')}
-          </Button>
-          <Button size="sm" variant="outline" className="flex-1 h-6 text-2xs" onClick={handleExportConfig}>
-            <Download data-icon="inline-start" className="size-2.5 mr-0.5" />{t('export')}
+        <div className="shrink-0 pt-2 border-t flex flex-col gap-1">
+          <div className="flex gap-1">
+            <Button size="sm" variant="outline" className="flex-1 h-6 text-2xs" onClick={() => configImportInputRef.current?.click()}>
+              <Upload data-icon="inline-start" className="size-2.5 mr-0.5" />{t('import')}
+            </Button>
+            <Button size="sm" variant="outline" className="flex-1 h-6 text-2xs" onClick={handleExportConfig}>
+              <Download data-icon="inline-start" className="size-2.5 mr-0.5" />{t('export')}
+            </Button>
+          </div>
+          <Button size="sm" variant="outline" className="w-full h-6 text-2xs" onClick={(e: React.MouseEvent) => {
+            onShowPopoverConfirm(e.clientX, e.clientY + POPOVER_OFFSET, () => {
+              useStore.setState({ providers: DEFAULT_PROVIDERS_WITH_FLAGS })
+              setSelectedProviderId('openai')
+            })
+          }}>
+            <RotateCcw data-icon="inline-start" className="size-2.5 mr-0.5" />{t('reset')}
           </Button>
         </div>
       </div>
@@ -383,9 +398,32 @@ export function ProviderTab({ onShowPopoverConfirm, configImportInputRef, onEdit
                   </div>
                 )}
                 <div className="flex items-center gap-1">
+
                   <Tooltip>
-                    <TooltipTrigger render={<Button size="icon" variant="ghost" className="size-6 hover:text-destructive"
-                        onClick={e => {
+                    <TooltipTrigger render={(props) => (
+                      <Button {...props} size="icon" variant="ghost" className="size-6"
+                        onClick={() => {
+                          const config = btoa(JSON.stringify([{ name: selectedProvider.name, apiUrl: selectedProvider.baseUrl, apiKey: apiKeys[selectedProvider.id] || '' }]))
+                          navigator.clipboard.writeText(window.location.origin + window.location.pathname + '#providers=' + config)
+                          toast.success(t('hashParamsCopied'))
+                        }}
+                      >
+                        <Hash className="size-3" />
+                      </Button>
+                    )} />
+                    <TooltipContent side="top" className="text-2xs px-2 py-1">{t('copyHashUrl')}</TooltipContent>
+                  </Tooltip>
+                  <Switch
+                    checked={!selectedProvider.disabled}
+                    onCheckedChange={checked => updateProvider(selectedProvider.id, { disabled: !checked })}
+                    className="scale-75"
+                  />
+
+                  <div className="w-px h-4 bg-border" />
+                  <Tooltip>
+                    <TooltipTrigger render={(props) => (
+                      <Button {...props} size="icon" variant="ghost" className="size-6 hover:text-destructive"
+                        onClick={(e: React.MouseEvent) => {
                           onShowPopoverConfirm(e.clientX, e.clientY + POPOVER_OFFSET, () => {
                             const currentIndex = providers.findIndex(p => p.id === selectedProvider.id)
                             const targetIndex = currentIndex > 0 ? currentIndex - 1 : Math.min(currentIndex + 1, providers.length - 1)
@@ -394,17 +432,12 @@ export function ProviderTab({ onShowPopoverConfirm, configImportInputRef, onEdit
                             setSelectedProviderId(targetProvider?.id || '')
                           })
                         }}
-                    />}>
-                      <Trash2 data-icon className="size-3" />
-                    </TooltipTrigger>
+                      >
+                        <Trash2 className="size-3" />
+                      </Button>
+                    )} />
                     <TooltipContent side="top" className="text-2xs px-2 py-1">{t('deleteProvider')}</TooltipContent>
                   </Tooltip>
-                  <div className="w-px h-4 bg-border" />
-                  <Switch
-                    checked={!selectedProvider.disabled}
-                    onCheckedChange={checked => updateProvider(selectedProvider.id, { disabled: !checked })}
-                    className="scale-75"
-                  />
                 </div>
               </div>
 
@@ -679,11 +712,13 @@ export function ProviderTab({ onShowPopoverConfirm, configImportInputRef, onEdit
                 <h4 className="text-xs font-medium">{t('modelList')}</h4>
                 {selectedProvider.models.length > 0 && (
                   <Tooltip>
-                    <TooltipTrigger render={<Button size="icon" variant="ghost" className="size-5"
-                        onClick={e => onShowPopoverConfirm(e.clientX, e.clientY + POPOVER_OFFSET, () => updateProvider(selectedProvider.id, { models: [] }))}
-                    />}>
-                      <Trash2 data-icon className="size-3" />
-                    </TooltipTrigger>
+                    <TooltipTrigger render={(props) => (
+                      <Button {...props} size="icon" variant="ghost" className="size-5"
+                        onClick={(e: React.MouseEvent) => onShowPopoverConfirm(e.clientX, e.clientY + POPOVER_OFFSET, () => updateProvider(selectedProvider.id, { models: [] }))}
+                      >
+                        <Trash2 className="size-3" />
+                      </Button>
+                    )} />
                     <TooltipContent side="top" className="text-2xs px-2 py-1">{t('clearModelList')}</TooltipContent>
                   </Tooltip>
                 )}
@@ -723,17 +758,21 @@ export function ProviderTab({ onShowPopoverConfirm, configImportInputRef, onEdit
                     </div>
                     <div className="shrink-0 flex items-center gap-0.5">
                       <Tooltip>
-                        <TooltipTrigger render={<Button size="icon" variant="ghost" className="size-5" onClick={() => onEditModel(model, selectedProvider.id)} />}>
-                          <Edit2 data-icon className="size-3" />
-                        </TooltipTrigger>
+                        <TooltipTrigger render={(props) => (
+                          <Button {...props} size="icon" variant="ghost" className="size-5" onClick={() => onEditModel(model, selectedProvider.id)}>
+                            <Edit2 className="size-3" />
+                          </Button>
+                        )} />
                         <TooltipContent side="top" className="text-2xs px-2 py-1">{t('editModel')}</TooltipContent>
                       </Tooltip>
                       <Tooltip>
-                        <TooltipTrigger render={<Button size="icon" variant="ghost" className="size-5 hover:text-destructive"
-                            onClick={e => onShowPopoverConfirm(e.clientX, e.clientY + POPOVER_OFFSET, () => updateProvider(selectedProvider.id, { models: selectedProvider.models.filter((_, j) => j !== i) }))}
-                        />}>
-                          <X data-icon className="size-3" />
-                        </TooltipTrigger>
+                        <TooltipTrigger render={(props) => (
+                          <Button {...props} size="icon" variant="ghost" className="size-5 hover:text-destructive"
+                            onClick={(e: React.MouseEvent) => onShowPopoverConfirm(e.clientX, e.clientY + POPOVER_OFFSET, () => updateProvider(selectedProvider.id, { models: selectedProvider.models.filter((_, j) => j !== i) }))}
+                          >
+                            <X className="size-3" />
+                          </Button>
+                        )} />
                         <TooltipContent side="top" className="text-2xs px-2 py-1">{t('removeModel')}</TooltipContent>
                       </Tooltip>
                     </div>

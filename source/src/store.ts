@@ -114,11 +114,14 @@ export const useStore = create<StoreState>()(
       },
 
       deleteConversation: (id) => set((state) => {
+        const index = state.conversations.findIndex(c => c.id === id)
         const filtered = state.conversations.filter(c => c.id !== id)
-        // 删除当前会话时自动切换到第一个剩余会话
-        const currentId = state.currentConversationId === id
-          ? (filtered[0]?.id || null)
-          : state.currentConversationId
+        // 删除当前会话时自动切换到上一个会话（若无则下一个）
+        let currentId = state.currentConversationId
+        if (state.currentConversationId === id) {
+          const prev = filtered[Math.max(0, index - 1)]
+          currentId = prev?.id || null
+        }
         return { conversations: filtered, currentConversationId: currentId }
       }),
 
@@ -398,6 +401,23 @@ export const useStore = create<StoreState>()(
         modelParams: state.modelParams,
         uiConfig: state.uiConfig,
       }),
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          const presetMap = new Map(DEFAULT_PROVIDERS_WITH_FLAGS.map(p => [p.id, p]))
+          let patched = false
+          const providers = state.providers.map(p => {
+            const preset = presetMap.get(p.id)
+            if (!preset) return p
+            const patch: Record<string, unknown> = {}
+            if (!p.consoleUrl && preset.consoleUrl) patch.consoleUrl = preset.consoleUrl
+            if (!p.apiKeyHint && preset.apiKeyHint) patch.apiKeyHint = preset.apiKeyHint
+            if (!p.apiUrlHint && preset.apiUrlHint) patch.apiUrlHint = preset.apiUrlHint
+            if (Object.keys(patch).length) { patched = true; return { ...p, ...patch } }
+            return p
+          })
+          if (patched) state.providers = providers
+        }
+      },
     }
   )
 )

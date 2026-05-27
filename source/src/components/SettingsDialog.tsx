@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useStore } from '../store'
 import type { ModelMetadata } from '../types'
@@ -10,13 +10,15 @@ import { GeneralTab } from './settings/GeneralTab'
 import { ProviderTab } from './settings/ProviderTab'
 import { ModelParamsTab, type ModelParamsTabHandle } from './settings/ModelParamsTab'
 import { PromptsTab } from './settings/PromptsTab'
-import { X, Settings, Cpu, Sliders, SwatchBook, ChevronLeft } from 'lucide-react'
+import { HashTab } from './settings/HashTab'
+import { X, Settings, Cpu, Sliders, SwatchBook, ChevronLeft, Hash } from 'lucide-react'
 
 const TABS = [
   { key: 'general', icon: Settings, labelKey: 'generalSettings' },
   { key: 'api', icon: Cpu, labelKey: 'modelService' },
   { key: 'model', icon: Sliders, labelKey: 'modelParams' },
   { key: 'prompts', icon: SwatchBook, labelKey: 'prompts' },
+  { key: 'hash', icon: Hash, labelKey: 'hashExamples' },
 ] as const
 
 export interface SettingsDialogProps {
@@ -29,6 +31,7 @@ export interface SettingsDialogProps {
   onExportData: () => void
   onImportData: (e: React.ChangeEvent<HTMLInputElement>) => void
   onThemeChange?: (theme: 'light' | 'dark' | 'system') => void
+  initialProviderId?: string
 }
 
 export function SettingsDialog({
@@ -41,12 +44,21 @@ export function SettingsDialog({
   onExportData,
   onImportData,
   onThemeChange,
+  initialProviderId,
 }: SettingsDialogProps) {
   const { setModelParams } = useStore()
   const { t } = useTranslation()
 
   const [settingsTab, setSettingsTab] = useState('api')
   const [mobileHome, setMobileHome] = useState(true)
+
+  // 通过 hash 导入供应商时，自动切换到模型服务 tab
+  useEffect(() => {
+    if (initialProviderId) {
+      setSettingsTab('api')
+      setMobileHome(false)
+    }
+  }, [initialProviderId])
 
   // 模型编辑
   const [editModelOpen, setEditModelOpen] = useState(false)
@@ -93,9 +105,11 @@ export function SettingsDialog({
                 <span className="text-xs font-medium">{t('settings')}</span>
               </div>
               <Tooltip>
-                <TooltipTrigger render={<Button size="icon" variant="ghost" className="size-6" onClick={handleClose} />}>
-                  <X data-icon className="size-3" />
-                </TooltipTrigger>
+                <TooltipTrigger render={(props) => (
+                  <Button {...props} size="icon" variant="ghost" className="size-6" onClick={handleClose}>
+                    <X className="size-3" />
+                  </Button>
+                )} />
                 <TooltipContent side="bottom" className="text-2xs px-2 py-1">{t('close')}</TooltipContent>
               </Tooltip>
             </div>
@@ -145,6 +159,7 @@ export function SettingsDialog({
                     onShowPopoverConfirm={onShowPopoverConfirm}
                     configImportInputRef={configImportInputRef}
                     onEditModel={handleEditModel}
+                    initialProviderId={initialProviderId}
                   />
                 )}
 
@@ -157,6 +172,10 @@ export function SettingsDialog({
                     onShowPopoverConfirm={onShowPopoverConfirm}
                     promptImportInputRef={promptImportInputRef}
                   />
+                )}
+
+                {settingsTab === 'hash' && (
+                  <HashTab />
                 )}
               </div>
             </div>

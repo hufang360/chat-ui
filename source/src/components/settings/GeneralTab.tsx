@@ -46,18 +46,22 @@ export function GeneralTab({ onShowConfirm, onThemeChange, onImportData, onExpor
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-1 text-2xs cursor-pointer">
+          <div>
+            <Label className="text-xs text-muted-foreground mb-2">对话气泡</Label>
+            <div className="flex items-center gap-2">
+            <label className="flex items-center gap-1 text-xs cursor-pointer">
               <Checkbox checked={uiConfig.autoCollapseCode || false}
                 onCheckedChange={checked => setUIConfig({ autoCollapseCode: !!checked })}
               />{t('autoCollapseCode')}
             </label>
-            <label className="flex items-center gap-1 text-2xs cursor-pointer">
+            <label className="flex items-center gap-1 text-xs cursor-pointer">
               <Checkbox checked={uiConfig.autoHideThinking || false}
                 onCheckedChange={checked => setUIConfig({ autoHideThinking: !!checked })}
               />{t('autoHideThinking')}
             </label>
+            </div>
           </div>
+
           {/* cors */}
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs text-muted-foreground">{t('corsProxyUrl')}</Label>
@@ -108,10 +112,11 @@ export function GeneralTab({ onShowConfirm, onThemeChange, onImportData, onExpor
             </div>
           </div>
         </div>
+
       {/* 数据管理 */}
       <div className="flex flex-col gap-2">
         <Label className="text-xs text-muted-foreground">{t('dataManagement')}</Label>
-        <div className="mt-auto flex gap-1">
+        <div className="mt-auto grid grid-cols-3 gap-1 w-full min-w-0">
           <Button variant="outline" size="sm" onClick={() => document.getElementById('import-data-input')?.click()} className="w-full h-7 text-xs">
             <Upload data-icon="inline-start" className="size-3 mr-1" />{t('importData')}
           </Button>

@@ -1,9 +1,10 @@
 import type { Provider, ModelParams, UIConfig, Prompt } from './types'
 
-export const APP_VERSION = '1.0.1(20260526)'
+export const APP_VERSION = '1.0.2(20260527)'
 
 export const generateId = () => Date.now().toString() + Math.random().toString(36).slice(2)
 
+// 供应商
 const DEFAULT_PROVIDERS: Provider[] = [
   {
     id: 'openai',
@@ -134,6 +135,7 @@ const DEFAULT_PROVIDERS: Provider[] = [
     apiType: 'ollama',
     allowEmptyApiKey: true,
     apiUrlHint: 'hintOllamaUrl',
+    disabled: true,
   },
   {
     id: 'lmstudio',
@@ -142,8 +144,22 @@ const DEFAULT_PROVIDERS: Provider[] = [
     models: ['qwen3.5/qwen3.5-0.8b'],
     apiType: 'openai',
     allowEmptyApiKey: true,
+    disabled: true,
   }
 ]
+
+// 提示词
+const DEFAULT_PROMPTS: Prompt[] = [
+  { id: 'zh', name: '中文回复', content: 'respond in chinese.' },
+  { id: 'translator', name: '翻译助手', content: '你是一个好用的翻译助手。请将我的中文翻译成英文，将所有非中文的翻译成中文。我发给你所有的话都是需要翻译的内容，你只需要回答翻译结果。翻译结果请符合中文的语言习惯。' },
+  { id: 'concise', name: '简洁回答', content: '请用简洁明了的语言回答，避免冗长，直击要点。' },
+  { id: 'detailed', name: '详细解释', content: '请详细解释概念，包括背景、原理、示例和注意事项，确保深入理解。' },
+  { id: 'examples', name: '举例说明', content: '请用具体的例子来说明，例子要贴近实际应用场景，便于理解。' },
+  { id: 'diagnosis', name: '问题诊断', content: '请分析问题产生的可能原因，提供诊断步骤和解决方案，包括预防措施。' },
+]
+
+export { DEFAULT_PROMPTS }
+
 
 export const MODEL_CAPABILITIES: Record<string, {
   supportsVision: boolean
@@ -177,14 +193,7 @@ export const DEFAULT_MODEL_PARAMS: ModelParams = {
   frequency_penalty: 0,
 }
 
-const DEFAULT_PROMPTS: Prompt[] = [
-  { id: generateId(), name: '中文回复', content: 'respond in chinese.' },
-  { id: generateId(), name: '翻译助手', content: '你是一个好用的翻译助手。请将我的中文翻译成英文，将所有非中文的翻译成中文。我发给你所有的话都是需要翻译的内容，你只需要回答翻译结果。翻译结果请符合中文的语言习惯。' },
-  { id: generateId(), name: '简洁回答', content: '请用简洁明了的语言回答，避免冗长，直击要点。' },
-  { id: generateId(), name: '详细解释', content: '请详细解释概念，包括背景、原理、示例和注意事项，确保深入理解。' },
-  { id: generateId(), name: '举例说明', content: '请用具体的例子来说明，例子要贴近实际应用场景，便于理解。' },
-  { id: generateId(), name: '问题诊断', content: '请分析问题产生的可能原因，提供诊断步骤和解决方案，包括预防措施。' },
-]
+
 
 export const DEFAULT_UI_CONFIG: UIConfig = {
   fontSize: 'base',

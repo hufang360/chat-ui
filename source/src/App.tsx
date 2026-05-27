@@ -4,7 +4,8 @@ import { useStore } from './store'
 import { APP_VERSION } from './constants.base'
 import { useChat } from './hooks/useChat'
 import { TooltipProvider } from './components/ui/tooltip'
-import { Toaster, toast } from 'sonner'
+import { toast } from 'sonner'
+import { Toaster } from './components/ui/sonner'
 import { Sidebar } from './components/Sidebar'
 import { ChatArea } from './components/ChatArea'
 import { SettingsDialog } from './components/SettingsDialog'
@@ -31,6 +32,7 @@ function App() {
 
   // 状态
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsInitialProviderId, setSettingsInitialProviderId] = useState<string | undefined>()
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 768)
 
   // 移动端（<768px）自动隐藏侧栏
@@ -55,6 +57,76 @@ function App() {
   // 启动时创建默认对话
   useEffect(() => {
     if (!currentConversationId) createConversation()
+  }, [])
+
+  // URL hash 参数解析：#text=xxx&prompt=xxx&providers=xxx&autosend
+  const [pendingText, setPendingText] = useState<string | null>(null)
+  const [autoSend, setAutoSend] = useState(false)
+  useEffect(() => {
+    const hash = window.location.hash.slice(1)
+    if (!hash) return
+
+    const params = new URLSearchParams(hash)
+    const text = params.get('text')
+    const promptId = params.get('prompt')
+    const providersParam = params.get('providers')
+    const autoSendParam = params.has('autosend')
+    if (!text && !promptId && !providersParam) return
+
+    // 清除 hash
+    window.history.replaceState(null, '', window.location.pathname + window.location.search)
+
+    // 处理 providers 参数：导入供应商（支持单个对象或数组）
+    let importedProviderIds: string[] = []
+    if (providersParam) {
+      try {
+        const raw = JSON.parse(atob(providersParam))
+        const items = Array.isArray(raw) ? raw : [raw]
+        const { providers, addProvider, updateProvider, setApiKey } = useStore.getState()
+        for (const item of items) {
+          const lc: Record<string, string> = {}
+          for (const [k, v] of Object.entries(item)) lc[k.toLowerCase()] = v as string
+          const name = lc.name || ''
+          const apiUrl = lc.apiurl || ''
+          const apiKey = lc.apikey || ''
+          const existing = providers.find(p => p.name === name)
+          if (existing) {
+            updateProvider(existing.id, { baseUrl: apiUrl })
+            if (apiKey) setApiKey(existing.id, apiKey)
+            importedProviderIds.push(existing.id)
+          } else if (apiUrl) {
+            const id = 'custom-' + Date.now()
+            addProvider({ id, name, baseUrl: apiUrl, models: [] })
+            if (apiKey) setApiKey(id, apiKey)
+            importedProviderIds.push(id)
+          }
+        }
+      } catch { /* 忽略无效 providers */ }
+    }
+
+    // 导入供应商后打开设置界面定位到最后一个供应商
+    if (importedProviderIds.length) {
+      setSettingsInitialProviderId(importedProviderIds[importedProviderIds.length - 1])
+      setSettingsOpen(true)
+    }
+
+    // 新建对话
+    const { createConversation, setConversationSystemPrompt } = useStore.getState()
+    const convId = createConversation()
+    if (!convId) return
+
+    if (text) {
+      setPendingText(decodeURIComponent(text))
+      if (autoSendParam) setAutoSend(true)
+    }
+
+    if (promptId) {
+      const prompts = useStore.getState().uiConfig.prompts || []
+      const prompt = prompts.find(p => p.id === promptId)
+      if (prompt) {
+        setConversationSystemPrompt(convId, prompt.content)
+      }
+    }
   }, [])
 
   // 主题同步到 DOM
@@ -210,6 +282,10 @@ function App() {
           sendMessage={sendMessage}
           stopGeneration={stopGeneration}
           regenerate={regenerate}
+          pendingText={pendingText}
+          autoSend={autoSend}
+          onPendingTextConsumed={() => setPendingText(null)}
+          onAutoSendConsumed={() => setAutoSend(false)}
           onThemeToggle={handleThemeToggle}
           themeIcon={getThemeIcon()}
           currentTheme={uiConfig.theme || 'system'}
@@ -218,7 +294,7 @@ function App() {
         {/* 设置对话框 */}
         <SettingsDialog
           open={settingsOpen}
-          onClose={() => setSettingsOpen(false)}
+          onClose={() => { setSettingsOpen(false); setSettingsInitialProviderId(undefined) }}
           onShowPopoverConfirm={showPopoverConfirm}
           onShowConfirm={showConfirm}
           configImportInputRef={configImportInputRef}
@@ -226,6 +302,7 @@ function App() {
           onExportData={handleExportData}
           onImportData={handleImportData}
           onThemeChange={setTheme}
+          initialProviderId={settingsInitialProviderId}
         />
 
         {/* Toast 通知 */}

@@ -61,17 +61,21 @@ export function Sidebar({
         </div>
         <div className="flex items-center gap-0.5">
           <Tooltip>
-            <TooltipTrigger render={<Button size="icon" variant="ghost" className="size-6" onClick={onStopAndCreateConversation} />}>
-              <Plus data-icon className="size-3" />
-            </TooltipTrigger>
+            <TooltipTrigger render={(props) => (
+              <Button {...props} size="icon" variant="ghost" className="size-6" onClick={onStopAndCreateConversation}>
+                <Plus className="size-3" />
+              </Button>
+            )} />
             <TooltipContent side="bottom" className="text-2xs px-2 py-1">
               {t('newConversation')}
             </TooltipContent>
           </Tooltip>
           <Tooltip>
-            <TooltipTrigger render={<Button size="icon" variant="ghost" className="size-6 md:hidden" onClick={onCloseSidebar} />}>
-              <PanelLeftClose data-icon className="size-3" />
-            </TooltipTrigger>
+            <TooltipTrigger render={(props) => (
+              <Button {...props} size="icon" variant="ghost" className="size-6 md:hidden" onClick={onCloseSidebar}>
+                <PanelLeftClose className="size-3" />
+              </Button>
+            )} />
             <TooltipContent side="bottom" className="text-2xs px-2 py-1">
               {t('collapseSidebar')}
             </TooltipContent>
@@ -133,31 +137,23 @@ export function Sidebar({
                 <span className="flex-1 truncate text-xs">{conv.title}</span>
                 <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 bg-background rounded">
                   <Tooltip>
-                    <TooltipTrigger render={<Button
-                        size="icon"
-                        variant="ghost"
-                        className="size-5"
-                        onClick={e => {
-                          e.stopPropagation()
-                          duplicateConversation(conv.id)
-                        }}
-                    />}>
-                      <Copy data-icon className="size-3" />
-                    </TooltipTrigger>
+                    <TooltipTrigger render={(props) => (
+                      <Button {...props} size="icon" variant="ghost" className="size-5"
+                        onClick={(e: React.MouseEvent) => { e.stopPropagation(); duplicateConversation(conv.id) }}
+                      >
+                        <Copy className="size-3" />
+                      </Button>
+                    )} />
                     <TooltipContent side="top" className="text-2xs px-2 py-1">{t('copy')}</TooltipContent>
                   </Tooltip>
                   <Tooltip>
-                    <TooltipTrigger render={<Button
-                        size="icon"
-                        variant="ghost"
-                        className="size-5"
-                        onClick={e => {
-                          e.stopPropagation()
-                          onPopoverConfirm?.(e.clientX, e.clientY + POPOVER_OFFSET, () => deleteConversation(conv.id))
-                        }}
-                    />}>
-                      <Trash2 data-icon className="size-3" />
-                    </TooltipTrigger>
+                    <TooltipTrigger render={(props) => (
+                      <Button {...props} size="icon" variant="ghost" className="size-5"
+                        onClick={(e: React.MouseEvent) => { e.stopPropagation(); onPopoverConfirm?.(e.clientX, e.clientY + POPOVER_OFFSET, () => deleteConversation(conv.id)) }}
+                      >
+                        <Trash2 className="size-3" />
+                      </Button>
+                    )} />
                     <TooltipContent side="top" className="text-2xs px-2 py-1">{t('delete')}</TooltipContent>
                   </Tooltip>
                 </div>
@@ -173,15 +169,14 @@ export function Sidebar({
 
       {/* 底部设置按钮 */}
       <div className="shrink-0 border-t p-1.5">
-        <div className="flex items-center">
-          <Button variant="ghost" size="sm" className="flex-1 justify-start text-xs h-7 gap-1.5"
-            onClick={onOpenSettings}
-          >
-            <Settings data-icon="inline-start" className="size-3 shrink-0" />
-            <span className="truncate">{t('settings')}</span>
-          </Button>
-          <span className="shrink-0 text-[10px] text-muted-foreground/50 px-1.5 select-none">v{APP_VERSION}</span>
-        </div>
+        <Button variant="ghost" size="sm" className="w-full justify-start text-xs h-7 gap-1.5"
+          onClick={onOpenSettings}
+        >
+          <Settings data-icon="inline-start" className="size-3 shrink-0" />
+          <span className="truncate">{t('settings')}
+            <span className="px-1 text-[10px] text-muted-foreground/50 select-none pb-0.5">v{APP_VERSION}</span>
+          </span>
+        </Button>
       </div>
     </div>
   )

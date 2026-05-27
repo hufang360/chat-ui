@@ -69,7 +69,7 @@ export function ModelEditDialog({ open, model, metadata, providerId, onClose }: 
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center">
       <div ref={panelRef} className="relative bg-background rounded-lg shadow-lg border w-full mx-4 max-w-md">
         <div className="px-4 py-3 flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
@@ -81,21 +81,18 @@ export function ModelEditDialog({ open, model, metadata, providerId, onClose }: 
                 onChange={e => setEditName(e.target.value)}
                 onBlur={handleNameBlur}
                 className="h-7 text-xs font-mono"
+                autoComplete="off"
                 onKeyDown={e => { if (e.key === 'Enter') { handleNameBlur(); onClose() } }}
               />
               <Tooltip>
-                <TooltipTrigger render={<Button
-                    size="icon"
-                    variant="ghost"
-                    className="size-7 shrink-0"
-                    onMouseDown={e => e.preventDefault()}
-                    onClick={() => {
-                      navigator.clipboard.writeText(editName)
-                      toast(t('modelCopied'))
-                    }}
-                />}>
-                  <Copy data-icon className="size-3" />
-                </TooltipTrigger>
+                <TooltipTrigger render={(props) => (
+                  <Button {...props} size="icon" variant="ghost" className="size-7 shrink-0"
+                    onMouseDown={(e: React.MouseEvent) => e.preventDefault()}
+                    onClick={() => { navigator.clipboard.writeText(editName); toast.success(t('modelCopied')) }}
+                  >
+                    <Copy className="size-3" />
+                  </Button>
+                )} />
                 <TooltipContent side="top" className="text-2xs px-2 py-1">{t('copyModelName')}</TooltipContent>
               </Tooltip>
             </div>

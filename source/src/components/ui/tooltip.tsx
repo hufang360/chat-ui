@@ -1,41 +1,67 @@
-import * as React from "react"
+"use client"
+
 import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip"
+import type { Tooltip as TooltipType } from "@base-ui/react/tooltip"
 
 import { cn } from "@/lib/utils"
 
-const TooltipProvider = ({ children }: { children: React.ReactNode }) => (
-  <TooltipPrimitive.Provider delay={0}>
-    {children}
-  </TooltipPrimitive.Provider>
-)
-
-const Tooltip = TooltipPrimitive.Root
-
-const TooltipTrigger = TooltipPrimitive.Trigger
-
-const TooltipContent = React.forwardRef<
-  HTMLDivElement,
-  React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Popup> & {
-    sideOffset?: number
-    side?: 'top' | 'bottom' | 'left' | 'right'
-  }
->(({ className, sideOffset = 4, side, ...props }, ref) => (
-  <TooltipPrimitive.Portal>
-    <TooltipPrimitive.Positioner sideOffset={sideOffset} side={side}>
-      <TooltipPrimitive.Popup
-      ref={ref}
-      className={cn(
-        "z-50 overflow-hidden rounded-md border bg-popover px-3 py-1.5 text-sm text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95 data-[closed]:animate-out data-[closed]:fade-out-0 data-[closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
-        className
-      )}
+function TooltipProvider({
+  delay = 0,
+  ...props
+}: TooltipType.Provider.Props) {
+  return (
+    <TooltipPrimitive.Provider
+      data-slot="tooltip-provider"
+      delay={delay}
       {...props}
-    >
-      {props.children}
-      <TooltipPrimitive.Arrow className="fill-popover" />
-    </TooltipPrimitive.Popup>
-  </TooltipPrimitive.Positioner>
-  </TooltipPrimitive.Portal>
-))
-TooltipContent.displayName = "TooltipContent"
+    />
+  )
+}
+
+function Tooltip({ ...props }: TooltipType.Root.Props) {
+  return <TooltipPrimitive.Root data-slot="tooltip" {...props} />
+}
+
+function TooltipTrigger({ ...props }: TooltipType.Trigger.Props) {
+  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />
+}
+
+function TooltipContent({
+  className,
+  side = "top",
+  sideOffset = 4,
+  align = "center",
+  alignOffset = 0,
+  children,
+  ...props
+}: TooltipType.Popup.Props &
+  Pick<
+    TooltipType.Positioner.Props,
+    "align" | "alignOffset" | "side" | "sideOffset"
+  >) {
+  return (
+    <TooltipPrimitive.Portal>
+      <TooltipPrimitive.Positioner
+        align={align}
+        alignOffset={alignOffset}
+        side={side}
+        sideOffset={sideOffset}
+        className="isolate z-50"
+      >
+        <TooltipPrimitive.Popup
+          data-slot="tooltip-content"
+          className={cn(
+            "cn-tooltip-content cn-tooltip-content-logical z-50 w-fit max-w-xs origin-(--transform-origin) bg-foreground text-background",
+            className
+          )}
+          {...props}
+        >
+          {children}
+          <TooltipPrimitive.Arrow className="cn-tooltip-arrow cn-tooltip-arrow-logical z-50 bg-foreground fill-foreground data-[side=bottom]:top-1 data-[side=left]:top-1/2! data-[side=left]:-right-1 data-[side=left]:-translate-y-1/2 data-[side=right]:top-1/2! data-[side=right]:-left-1 data-[side=right]:-translate-y-1/2 data-[side=top]:-bottom-2.5" />
+        </TooltipPrimitive.Popup>
+      </TooltipPrimitive.Positioner>
+    </TooltipPrimitive.Portal>
+  )
+}
 
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider }

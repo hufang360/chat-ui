@@ -106,6 +106,21 @@
   background: hsl(var(--muted-foreground) / 0.5);
 }
 
+/* shadcn tooltip 组件样式 */
+.cn-tooltip-content {
+  @apply inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs;
+}
+
+.cn-tooltip-content-logical {
+}
+
+.cn-tooltip-arrow {
+  @apply size-2.5 translate-y-[calc(-50%-2px)] rotate-45 rounded-[2px];
+}
+
+.cn-tooltip-arrow-logical {
+}
+
 /* 代码高亮样式 */
 .hljs {
   background: hsl(var(--muted));

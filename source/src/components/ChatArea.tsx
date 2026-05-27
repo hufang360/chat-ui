@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { ScrollArea } from '@/components/ui/scroll-area'
+
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { CodeBlock } from './CodeBlock'
 import {
@@ -34,10 +34,9 @@ import {
   User,
   Bot,
   AlertCircle,
-  PanelLeftOpen,
-  PanelLeftClose,
   Globe,
   Settings,
+  Sidebar,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -61,6 +60,10 @@ export interface ChatAreaProps {
   onThemeToggle?: () => void
   themeIcon?: React.ReactNode
   currentTheme?: 'light' | 'dark' | 'system'
+  pendingText?: string | null
+  autoSend?: boolean
+  onPendingTextConsumed?: () => void
+  onAutoSendConsumed?: () => void
 }
 
 export function ChatArea({
@@ -82,6 +85,10 @@ export function ChatArea({
   onThemeToggle,
   themeIcon,
   currentTheme,
+  pendingText,
+  autoSend,
+  onPendingTextConsumed,
+  onAutoSendConsumed,
 }: ChatAreaProps) {
   const {
     currentConversationId,
@@ -112,10 +119,26 @@ export function ChatArea({
   const [editingSystemPrompt, setEditingSystemPrompt] = useState(false)
   const [systemPromptEdit, setSystemPromptEdit] = useState('')
   const [promptMenuOpen, setPromptMenuOpen] = useState(false)
+
+  // 消费 URL hash 传入的预填充文本
+  useEffect(() => {
+    if (pendingText) {
+      setInput(pendingText)
+      onPendingTextConsumed?.()
+      if (autoSend) {
+        onAutoSendConsumed?.()
+        setTimeout(() => sendMessage(pendingText, []), 100)
+      } else {
+        setTimeout(() => inputRef.current?.focus(), 100)
+      }
+    }
+  }, [pendingText])
   const [promptSearch, setPromptSearch] = useState('')
   const [thinkingEnabled, setThinkingEnabled] = useState(false)
   const [thinkingLevel, setThinkingLevel] = useState<'low' | 'medium' | 'high'>('medium')
   const [thinkingMenuOpen, setThinkingMenuOpen] = useState(false)
+  const promptBtnRef = useRef<HTMLButtonElement>(null)
+  const thinkingBtnRef = useRef<HTMLButtonElement>(null)
   const [streamingThinkingExpanded, setStreamingThinkingExpanded] = useState(!autoHideThinking)
   const [expandedThinkingIds, setExpandedThinkingIds] = useState<Set<string>>(new Set())
   const [expandedErrorIds, setExpandedErrorIds] = useState<Set<string>>(new Set())
@@ -274,6 +297,18 @@ export function ChatArea({
     }
   }
 
+  const handleSaveAndRegenerate = () => {
+    if (!editingId) return
+    updateMessage(editingId, editContent)
+    setEditingId(null)
+    setEditContent('')
+    const messages = currentConversation?.messages || []
+    const msgIndex = messages.findIndex(m => m.id === editingId)
+    if (msgIndex === -1) return
+    const editedMessage = { ...messages[msgIndex], content: editContent }
+    handleRegenerate(editedMessage)
+  }
+
   const handleStartEditSystemPrompt = () => {
     setSystemPromptEdit(currentConversation?.systemPrompt ?? globalSystemPrompt)
     setEditingSystemPrompt(true)
@@ -317,6 +352,8 @@ export function ChatArea({
       const nextAssistant = messages.slice(messageIndex + 1).find(m => m.role === 'assistant')
       if (nextAssistant) {
         targetIndex = messages.findIndex(m => m.id === nextAssistant.id)
+      } else {
+        targetIndex = messageIndex + 1
       }
     }
 
@@ -379,9 +416,11 @@ export function ChatArea({
       <div className="h-8 border-b flex items-center p-2 shrink-0">
         <div className="flex items-center gap-0.5">
           <Tooltip>
-            <TooltipTrigger render={<Button size="icon" variant="ghost" className="size-6" onClick={onToggleSidebar} />}>
-              {sidebarOpen ? <PanelLeftClose data-icon className="size-3" /> : <PanelLeftOpen data-icon className="size-3" />}
-            </TooltipTrigger>
+            <TooltipTrigger render={(props) => (
+              <Button {...props} size="icon" variant="ghost" className="size-6" onClick={onToggleSidebar}>
+                <Sidebar className="size-3" /> 
+              </Button>
+            )} />
             <TooltipContent side="bottom" className="text-2xs px-2 py-1">
               {sidebarOpen ? t('collapseSidebar') : t('expandSidebar')}
             </TooltipContent>
@@ -428,35 +467,43 @@ export function ChatArea({
         <div className="flex-1" />
         <div className="flex items-center gap-0.5">
           <Tooltip>
-            <TooltipTrigger render={<Button size="icon" variant="ghost" className="size-6 hidden md:inline-flex" onClick={onToggleChatWidth} />}>
-              {chatWidth === 'compact' ? <UnfoldHorizontal data-icon className="size-3" /> : <FoldHorizontal data-icon className="size-3" />}
-            </TooltipTrigger>
+            <TooltipTrigger render={(props) => (
+              <Button {...props} size="icon" variant="ghost" className="size-6 hidden md:inline-flex" onClick={onToggleChatWidth}>
+                {chatWidth === 'compact' ? <UnfoldHorizontal className="size-3" /> : <FoldHorizontal className="size-3" />}
+              </Button>
+            )} />
             <TooltipContent side="bottom" className="text-2xs px-2 py-1">
               {chatWidth === 'compact' ? t('switchToFullWidth') : t('switchToCompact')}
             </TooltipContent>
           </Tooltip>
           {onThemeToggle && (
             <Tooltip>
-              <TooltipTrigger render={<Button size="icon" variant="ghost" className="size-6 hidden md:inline-flex" onClick={onThemeToggle} />}>
-                {themeIcon}
-              </TooltipTrigger>
+              <TooltipTrigger render={(props) => (
+                <Button {...props} size="icon" variant="ghost" className="size-6 hidden md:inline-flex" onClick={onThemeToggle}>
+                  {themeIcon}
+                </Button>
+              )} />
               <TooltipContent side="bottom" className="text-2xs px-2 py-1">
                 {t('themeLabel', { theme: getThemeLabel() })}
               </TooltipContent>
             </Tooltip>
           )}
           <Tooltip>
-            <TooltipTrigger render={<Button size="icon" variant="ghost" className="size-6 hidden md:inline-flex" onClick={() => setLanguage(uiConfig.language === 'en' ? 'zh' : 'en')} />}>
-              <Globe data-icon className="size-3" />
-            </TooltipTrigger>
+            <TooltipTrigger render={(props) => (
+              <Button {...props} size="icon" variant="ghost" className="size-6 hidden md:inline-flex" onClick={() => setLanguage(uiConfig.language === 'en' ? 'zh' : 'en')}>
+                <Globe className="size-3" />
+              </Button>
+            )} />
             <TooltipContent side="bottom" className="text-2xs px-2 py-1">
               {uiConfig.language === 'en' ? '中文' : 'English'}
             </TooltipContent>
           </Tooltip>
           <Tooltip>
-            <TooltipTrigger render={<Button size="icon" variant="ghost" className="size-6" onClick={onShowSettings} />}>
-              <Settings data-icon className="size-3" />
-            </TooltipTrigger>
+            <TooltipTrigger render={(props) => (
+              <Button {...props} size="icon" variant="ghost" className="size-6" onClick={onShowSettings}>
+                <Settings className="size-3" />
+              </Button>
+            )} />
             <TooltipContent side="bottom" className="text-2xs px-2 py-1">
               {t('settings')}
             </TooltipContent>
@@ -508,7 +555,7 @@ export function ChatArea({
                           <Button size="icon" variant="ghost" className="size-5" onClick={() => handleCopyMessage(displayPrompt)}><Copy data-icon className="size-2.5" /></Button>
                           <Button size="icon" variant="ghost" className="size-5" onClick={handleStartEditSystemPrompt}><Edit2 data-icon className="size-2.5" /></Button>
                           <Button size="icon" variant="ghost" className="size-5"
-                            onClick={e => onShowPopoverConfirm(e.clientX, e.clientY + 8, () => {
+                            onClick={(e: React.MouseEvent) => onShowPopoverConfirm(e.clientX, e.clientY + 8, () => {
                               setConversationSystemPrompt(currentConversationId!, '')
                             })}
                           ><Trash2 data-icon className="size-2.5" /></Button>
@@ -540,6 +587,9 @@ export function ChatArea({
                         />
                         <div className="flex gap-1">
                           <Button size="sm" className="h-5 text-2xs" onClick={handleSaveEdit}><Check data-icon="inline-start" className="size-2.5 mr-0.5" />{t('save')}</Button>
+                          {message.role === 'user' && (
+                            <Button size="sm" variant="outline" className="h-5 text-2xs" onClick={handleSaveAndRegenerate}><RefreshCw data-icon="inline-start" className="size-2.5 mr-0.5" />{t('saveAndRegenerate')}</Button>
+                          )}
                           <Button size="sm" variant="outline" className="h-5 text-2xs" onClick={() => { setEditingId(null); setEditContent('') }}><X data-icon="inline-start" className="size-2.5 mr-0.5" />{t('cancel')}</Button>
                         </div>
                       </div>
@@ -629,7 +679,7 @@ export function ChatArea({
                             <Button size="icon" variant="ghost" className="size-5" onClick={() => handleRegenerate(message)} disabled={isLoading}><RefreshCw data-icon className="size-2.5" /></Button>
                           )}
                           <Button size="icon" variant="ghost" className="size-5"
-                            onClick={e => onShowPopoverConfirm(e.clientX, e.clientY + 8, () => deleteMessage(message.id))}
+                            onClick={(e: React.MouseEvent) => onShowPopoverConfirm(e.clientX, e.clientY + 8, () => deleteMessage(message.id))}
                             ><Trash2 data-icon className="size-2.5" /></Button>
                           {message.model && (() => {
                             const modelProvider = providers.find(p => p.models.includes(message.model!))
@@ -750,9 +800,11 @@ export function ChatArea({
             <div className="flex items-center gap-2">
               {/* 模型选择 */}
               <Popover open={modelSelectOpen} onOpenChange={setModelSelectOpen}>
-                <PopoverTrigger render={<Button variant="outline" size="sm" className="h-7 text-xs" disabled={isLoading} />}>
-                  {selectedModel || t('selectModel')}
-                </PopoverTrigger>
+                <PopoverTrigger render={(props) => (
+                  <Button {...props} size="sm" variant="outline" className="h-7" disabled={isLoading}>
+                    {selectedModel || t('selectModel')}
+                  </Button>
+                )} />
                 <PopoverContent side="top" align="start" className="w-80 p-0 z-50" sideOffset={8}>
                   <div className="p-1.5 border-b">
                     <div className="relative">
@@ -828,95 +880,109 @@ export function ChatArea({
 
               <div className="flex items-center gap-1">
                 {/* 提示词 */}
+                <Tooltip>
+                  <TooltipTrigger render={(props) => (
+                    <Button {...props} ref={(el) => { (promptBtnRef as React.MutableRefObject<HTMLButtonElement | null>).current = el; if (typeof props.ref === 'function') props.ref(el); else if (props.ref) (props.ref as React.MutableRefObject<HTMLButtonElement | null>).current = el }} size="icon" variant="outline" className="size-7 shrink-0" disabled={isLoading}
+                      onClick={() => setPromptMenuOpen(prev => !prev)}
+                    >
+                      <SwatchBook className="size-3" />
+                    </Button>
+                  )} />
+                  <TooltipContent side="top" className="text-2xs px-2 py-1">{t('prompts')}</TooltipContent>
+                </Tooltip>
                 <Popover open={promptMenuOpen} onOpenChange={setPromptMenuOpen}>
-                  <PopoverTrigger render={<Button size="icon" variant="outline" className="size-7 shrink-0" disabled={isLoading} />}>
-                    <SwatchBook data-icon className="size-3" />
-                  </PopoverTrigger>
-                <PopoverContent side="top" align="start" className="w-52 p-0 z-50" sideOffset={8}>
-                  <div className="p-1.5 border-b">
-                    <div className="relative">
-                      <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3 text-muted-foreground" />
-                      <Input value={promptSearch} onChange={e => setPromptSearch(e.target.value)} placeholder={t('searchPrompt')} className="pl-7 h-6 text-xs" autoFocus />
-                    </div>
-                  </div>
-                  <ScrollArea className="max-h-[200px]">
-                    {(uiConfig.prompts || []).filter(p => p.name.toLowerCase().includes(promptSearch.toLowerCase())).length === 0 ? (
-                      <div className="px-3 py-4 text-center text-2xs text-muted-foreground">{t('noMatchingPrompts')}</div>
-                    ) : (
-                      <div>
-                        {(uiConfig.prompts || []).filter(p => p.name.toLowerCase().includes(promptSearch.toLowerCase())).map((prompt) => (
-                          <div key={prompt.id} className="px-2.5 py-1.5 text-xs hover:bg-accent cursor-pointer"
-                            onClick={() => {
-                              // 设置系统提示词
-                              if (currentConversationId) {
-                                setConversationSystemPrompt(currentConversationId, prompt.content)
-                              } else {
-                                setGlobalSystemPrompt(prompt.content)
-                              }
-                              setPromptMenuOpen(false)
-                              setPromptSearch('')
-                              toast(t('promptSet', { name: prompt.name }))
-                            }}
-                          ><span className="truncate">{prompt.name}</span></div>
-                        ))}
+                  <PopoverContent anchor={promptBtnRef} side="top" align="start" className="w-52 p-0 z-50" sideOffset={8}>
+                    <div className="p-1.5 border-b">
+                      <div className="relative">
+                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3 text-muted-foreground" />
+                        <Input value={promptSearch} onChange={e => setPromptSearch(e.target.value)} placeholder={t('searchPrompt')} className="pl-7 h-6 text-xs" autoFocus />
                       </div>
-                    )}
-                  </ScrollArea>
-                </PopoverContent>
-              </Popover>
+                    </div>
+                    <div className="overflow-y-auto max-h-[200px]">
+                      {(uiConfig.prompts || []).filter(p => p.name.toLowerCase().includes(promptSearch.toLowerCase())).length === 0 ? (
+                        <div className="px-3 py-4 text-center text-2xs text-muted-foreground">{t('noMatchingPrompts')}</div>
+                      ) : (
+                        <div>
+                          {(uiConfig.prompts || []).filter(p => p.name.toLowerCase().includes(promptSearch.toLowerCase())).map((prompt) => (
+                            <div key={prompt.id} className="px-2.5 py-1.5 text-xs hover:bg-accent cursor-pointer"
+                              onClick={() => {
+                                if (currentConversationId) {
+                                  setConversationSystemPrompt(currentConversationId, prompt.content)
+                                } else {
+                                  setGlobalSystemPrompt(prompt.content)
+                                }
+                                setPromptMenuOpen(false)
+                                setPromptSearch('')
+                                toast.success(t('promptSet', { name: prompt.name }))
+                              }}
+                            ><span className="truncate">{prompt.name}</span></div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
 
-              {/* 思维链 */}
-              <Popover open={thinkingMenuOpen} onOpenChange={setThinkingMenuOpen}>
-                <PopoverTrigger render={<Button size="icon" variant="outline" className="size-7 shrink-0"
-                    disabled={isLoading || !selectedModelSupportsThinking}
-                />}>
-                    {!thinkingEnabled ? (
-                      <LightbulbOff data-icon className="size-3" />
-                    ) : thinkingLevel === 'low' ? (
-                      <Lightbulb data-icon className="size-3 text-systemPrompt" />
-                    ) : (
-                      <Lightbulb data-icon className="size-3 text-systemPrompt fill-systemPrompt" />
-                    )}
-                </PopoverTrigger>
-                <PopoverContent side="top" align="center" className="w-24 p-1 z-50" sideOffset={8}>
-                  <div className="flex flex-col gap-0.5">
-                    <button
-                      onClick={() => { setThinkingEnabled(false); setThinkingMenuOpen(false) }}
-                      className={`w-full px-2 py-1.5 text-xs text-left rounded hover:bg-accent transition-colors ${!thinkingEnabled ? 'bg-accent' : ''}`}
+                {/* 思维链 */}
+                <Tooltip>
+                  <TooltipTrigger render={(props) => (
+                    <Button {...props} ref={(el) => { (thinkingBtnRef as React.MutableRefObject<HTMLButtonElement | null>).current = el; if (typeof props.ref === 'function') props.ref(el); else if (props.ref) (props.ref as React.MutableRefObject<HTMLButtonElement | null>).current = el }} size="icon" variant="outline" className="size-7 shrink-0"
+                      disabled={isLoading || !selectedModelSupportsThinking}
+                      onClick={() => setThinkingMenuOpen(prev => !prev)}
                     >
-                      {t('off')}
-                    </button>
-                    <button
-                      onClick={() => { setThinkingEnabled(true); setThinkingLevel('low'); setThinkingMenuOpen(false) }}
-                      className={`w-full px-2 py-1.5 text-xs text-left rounded hover:bg-accent transition-colors ${thinkingEnabled && thinkingLevel === 'low' ? 'bg-accent' : ''}`}
-                    >
-                      {t('low')}
-                    </button>
-                    <button
-                      onClick={() => { setThinkingEnabled(true); setThinkingLevel('medium'); setThinkingMenuOpen(false) }}
-                      className={`w-full px-2 py-1.5 text-xs text-left rounded hover:bg-accent transition-colors ${thinkingEnabled && thinkingLevel === 'medium' ? 'bg-accent' : ''}`}
-                    >
-                      {t('medium')}
-                    </button>
-                    <button
-                      onClick={() => { setThinkingEnabled(true); setThinkingLevel('high'); setThinkingMenuOpen(false) }}
-                      className={`w-full px-2 py-1.5 text-xs text-left rounded hover:bg-accent transition-colors ${thinkingEnabled && thinkingLevel === 'high' ? 'bg-accent' : ''}`}
-                    >
-                      {t('high')}
-                    </button>
-                  </div>
-                </PopoverContent>
-              </Popover>
+                      {!thinkingEnabled ? (
+                        <LightbulbOff className="size-3" />
+                      ) : thinkingLevel === 'low' ? (
+                        <Lightbulb className="size-3 text-systemPrompt" />
+                      ) : (
+                        <Lightbulb className="size-3 text-systemPrompt fill-systemPrompt" />
+                      )}
+                    </Button>
+                  )} />
+                  <TooltipContent side="top" className="text-2xs px-2 py-1">{t('thinkingProcess')}</TooltipContent>
+                </Tooltip>
+                <Popover open={thinkingMenuOpen} onOpenChange={setThinkingMenuOpen}>
+                  <PopoverContent anchor={thinkingBtnRef} side="top" align="center" className="w-24 p-1 z-50" sideOffset={8}>
+                    <div className="flex flex-col gap-0.5">
+                      <button
+                        onClick={() => { setThinkingEnabled(false); setThinkingMenuOpen(false) }}
+                        className={`w-full px-2 py-1.5 text-xs text-left rounded hover:bg-accent transition-colors ${!thinkingEnabled ? 'bg-accent' : ''}`}
+                      >
+                        {t('off')}
+                      </button>
+                      <button
+                        onClick={() => { setThinkingEnabled(true); setThinkingLevel('low'); setThinkingMenuOpen(false) }}
+                        className={`w-full px-2 py-1.5 text-xs text-left rounded hover:bg-accent transition-colors ${thinkingEnabled && thinkingLevel === 'low' ? 'bg-accent' : ''}`}
+                      >
+                        {t('low')}
+                      </button>
+                      <button
+                        onClick={() => { setThinkingEnabled(true); setThinkingLevel('medium'); setThinkingMenuOpen(false) }}
+                        className={`w-full px-2 py-1.5 text-xs text-left rounded hover:bg-accent transition-colors ${thinkingEnabled && thinkingLevel === 'medium' ? 'bg-accent' : ''}`}
+                      >
+                        {t('medium')}
+                      </button>
+                      <button
+                        onClick={() => { setThinkingEnabled(true); setThinkingLevel('high'); setThinkingMenuOpen(false) }}
+                        className={`w-full px-2 py-1.5 text-xs text-left rounded hover:bg-accent transition-colors ${thinkingEnabled && thinkingLevel === 'high' ? 'bg-accent' : ''}`}
+                      >
+                        {t('high')}
+                      </button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
 
               
               {/* 图片 */}
               <Tooltip>
-                <TooltipTrigger render={<Button size="icon" variant="outline" className="size-7 shrink-0"
+                <TooltipTrigger render={(props) => (
+                  <Button {...props} size="icon" variant="outline" className="size-7 shrink-0"
                     disabled={isLoading || !selectedModelSupportsVision}
                     onClick={() => fileInputRef.current?.click()}
-                />}>
-                  <ImageIcon data-icon className="size-3" />
-                </TooltipTrigger>
+                  >
+                    <ImageIcon className="size-3" />
+                  </Button>
+                )} />
                 <TooltipContent side="top" className="text-2xs px-2 py-1">
                   {!selectedModelSupportsVision ? t('modelNotSupportVision') : t('uploadImage')}
                 </TooltipContent>

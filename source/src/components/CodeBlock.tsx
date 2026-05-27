@@ -86,36 +86,27 @@ export function CodeBlock({ language, children, autoCollapse = false, fontSize =
         <span className="text-2xs text-muted-foreground font-mono">{language}</span>
         <div className="flex items-center gap-0.5">
           <Tooltip>
-            <TooltipTrigger render={<Button
-                size="icon"
-                variant="ghost"
-                className="size-5 text-toolbar-text hover:text-foreground hover:bg-toolbar-hover"
-                onClick={() => setWrap(!wrap)}
-            />}>
-              <WrapText data-icon className="size-3" />
-            </TooltipTrigger>
+            <TooltipTrigger render={(props) => (
+              <Button {...props} size="icon" variant="ghost" className="size-5 text-toolbar-text hover:text-foreground hover:bg-toolbar-hover" onClick={() => setWrap(!wrap)}>
+                <WrapText className="size-3" />
+              </Button>
+            )} />
             <TooltipContent side="top" className="text-2xs px-2 py-1">{wrap ? t('unwrap') : t('autoWrap')}</TooltipContent>
           </Tooltip>
           <Tooltip>
-            <TooltipTrigger render={<Button
-                size="icon"
-                variant="ghost"
-                className="size-5 text-toolbar-text hover:text-foreground hover:bg-toolbar-hover"
-                onClick={handleCopy}
-            />}>
-              {copied ? <Check data-icon className="size-3" /> : <Copy data-icon className="size-3" />}
-            </TooltipTrigger>
+            <TooltipTrigger render={(props) => (
+              <Button {...props} size="icon" variant="ghost" className="size-5 text-toolbar-text hover:text-foreground hover:bg-toolbar-hover" onClick={handleCopy}>
+                {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
+              </Button>
+            )} />
             <TooltipContent side="top" className="text-2xs px-2 py-1">{t('copy')}</TooltipContent>
           </Tooltip>
           <Tooltip>
-            <TooltipTrigger render={<Button
-                size="icon"
-                variant="ghost"
-                className="size-5 text-toolbar-text hover:text-foreground hover:bg-toolbar-hover"
-                onClick={() => setCollapsed(!collapsed)}
-            />}>
-              {collapsed ? <ChevronDown data-icon className="size-3" /> : <ChevronRight data-icon className="size-3" />}
-            </TooltipTrigger>
+            <TooltipTrigger render={(props) => (
+              <Button {...props} size="icon" variant="ghost" className="size-5 text-toolbar-text hover:text-foreground hover:bg-toolbar-hover" onClick={() => setCollapsed(!collapsed)}>
+                {collapsed ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+              </Button>
+            )} />
             <TooltipContent side="top" className="text-2xs px-2 py-1">{collapsed ? t('expand') : t('collapse')}</TooltipContent>
           </Tooltip>
         </div>

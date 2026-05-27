@@ -58,7 +58,7 @@ export async function streamChat(options: StreamOptions) {
     if (modelParams) {
       if (modelParams.temperature !== undefined) body.temperature = modelParams.temperature
       if (modelParams.top_p !== undefined) body.top_p = modelParams.top_p
-      if (modelParams.max_tokens !== undefined) body.max_tokens = modelParams.max_tokens
+      if (modelParams.max_tokens) body.max_tokens = modelParams.max_tokens
       if (modelParams.presence_penalty !== undefined) body.presence_penalty = modelParams.presence_penalty
       if (modelParams.frequency_penalty !== undefined) body.frequency_penalty = modelParams.frequency_penalty
       // 思考模式
