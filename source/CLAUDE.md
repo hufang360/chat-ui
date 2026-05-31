@@ -64,23 +64,73 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
 
+---
 
 # UI开发规范
 
 ## 核心原则
-本项目使用 SHACN New York 设计系统。**严禁自行编写样式**，必须优先使用设计系统提供的组件和工具类。
+本项目采用 **双层设计系统架构**：
+- **基础层**：Base UI（无样式组件，提供完整交互逻辑和无障碍支持）
+- **表现层**：SHACN New York 设计系统（基于 Base UI 构建，提供统一视觉风格）
+
+**严禁自行编写样式或交互逻辑**，必须优先使用设计系统提供的组件。
+
+## 架构关系
+```
+Base UI（逻辑层）  →  SHACN New York（表现层）  →  业务组件
+     ↓                      ↓
+  交互行为              视觉样式
+  无障碍支持            设计规范
+  键盘导航              响应式布局
+```
 
 ## 使用方式
-- 所有 UI 元素使用 New York 设计系统的组件库
-- 通过组件的 props/属性控制外观和行为
-- 如需自定义，仅使用设计系统暴露的 tokens 或 CSS 变量
+
+### 优先级顺序
+1. **首选**：直接使用 SHACN New York 组件（如 `Button`, `Input`, `Tooltip`, `Card` 等）
+2. **备选**：当 SHACN 无对应组件时，使用 Base UI 组件并应用 New York 设计系统样式
+3. **禁止**：自行编写交互逻辑或样式
+
+### 组件使用规范
+```tsx
+// ✅ 正确：直接使用 SHACN 组件
+import { Button } from "@/components/ui/button"
+<Button variant="primary">提交</Button>
+
+// ✅ 正确：SHACN 无对应组件时，使用 Base UI + 设计系统样式
+import { Dialog } from "@base-ui-components/react/dialog"
+import { nyDialogStyles } from "@/lib/design-system"
+<Dialog className={nyDialogStyles}>...</Dialog>
+
+// ❌ 错误：自行编写交互逻辑
+<div onClick={handleClick} onKeyDown={handleKeyDown}>...</div>
+```
 
 ## 代码要求
+
+### 组件使用
+- ✅ 优先使用 SHACN New York 组件库
+- ✅ SHACN 缺失时，使用 Base UI 组件并应用设计系统样式
+- ✅ 组件找不到时，先查阅 [Base UI 文档](https://base-ui.com) 和 SHACN 文档
+
+### 样式控制
+- ✅ 使用组件的 props/属性控制外观和行为
+- ✅ 使用设计系统 tokens：`var(--ny-color-primary)` 等
+- ✅ 使用设计系统提供的 CSS 变量和工具类
 - ❌ 不要写自定义 CSS
 - ❌ 不要硬编码颜色、字体、间距等样式值
-- ✅ 使用设计系统组件：Button, Input, Tooltip, Card 等
-- ✅ 使用设计系统 tokens：`var(--ny-color-primary)` 等
-- ✅ 组件找不到时，先查阅设计系统文档再决定
+
+### 交互逻辑
+- ✅ 使用 Base UI 提供的交互原语（hooks、组件）
+- ✅ 依赖组件内置的无障碍支持和键盘导航
+- ❌ 不要自行实现焦点管理、ARIA 属性等
 
 ## 移动端
 所有组件默认响应式，无需额外处理。必要时使用组件自带的响应式 props。
+
+## 扩展组件流程
+当需要新增 UI 组件时：
+1. 检查 SHACN New York 是否已有该组件
+2. 若无，检查 Base UI 是否提供对应原语
+3. 基于 Base UI 原语，应用 New York 设计系统样式进行封装
+4. 保持与现有组件一致的 API 设计

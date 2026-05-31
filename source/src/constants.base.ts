@@ -1,6 +1,6 @@
 import type { Provider, ModelParams, UIConfig, Prompt } from './types'
 
-export const APP_VERSION = '1.0.2(20260527)'
+export const APP_VERSION = '1.1.0(20260531)'
 
 export const generateId = () => Date.now().toString() + Math.random().toString(36).slice(2)
 
@@ -10,14 +10,31 @@ const DEFAULT_PROVIDERS: Provider[] = [
     id: 'openai',
     name: 'OpenAI',
     baseUrl: 'https://api.openai.com/v1',
-    models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
+    models: ['gpt-5.4', 'gpt-5-mini', 'gpt-4o', 'gpt-4o-mini', 'o3-pro', 'o3-mini'],
     apiType: 'openai',
     consoleUrl: 'https://platform.openai.com',
     modelMetadata: {
+      'gpt-5.4':       { supportsVision: true,  supportsThinking: true,  contextLength: 256000 },
+      'gpt-5-mini':    { supportsVision: true,  supportsThinking: true,  contextLength: 256000 },
       'gpt-4o':        { supportsVision: true,  supportsThinking: false, contextLength: 128000 },
-      'gpt-4o-mini':   { supportsVision: true,  supportsThinking: false, contextLength: 128000 },
-      'gpt-4-turbo':   { supportsVision: true,  supportsThinking: false, contextLength: 128000 },
-      'gpt-3.5-turbo': { supportsVision: false, supportsThinking: false, contextLength: 16385 },
+      'gpt-4o-mini':   { supportsVision: true,  supportsThinking: true,  contextLength: 128000 },
+      'o3-pro':        { supportsVision: true,  supportsThinking: true,  contextLength: 200000 },
+      'o3-mini':       { supportsVision: true,  supportsThinking: true,  contextLength: 200000 },
+    },
+  },
+  // https://ai.google.dev/gemini-api/docs/openai?hl=zh-cn
+  {
+    id: 'gemini',
+    name: 'Gemini',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    models: ['models/gemini-3-pro', 'models/gemini-3-flash', 'models/gemini-2.5-pro', 'models/gemini-2.5-flash'],
+    apiType: 'openai',
+    consoleUrl: 'https://aistudio.google.com/apikey',
+    modelMetadata: {
+      'models/gemini-3-pro':     { supportsVision: true, supportsThinking: true, useReasoningEffort: true, unsupportedParams: ['thinking'], contextLength: 1048576 },
+      'models/gemini-3-flash':   { supportsVision: true, supportsThinking: true, useReasoningEffort: true, unsupportedParams: ['thinking'], contextLength: 1048576 },
+      'models/gemini-2.5-pro':   { supportsVision: true, supportsThinking: true, useReasoningEffort: true, unsupportedParams: ['thinking'], contextLength: 1048576 },
+      'models/gemini-2.5-flash':  { supportsVision: true, supportsThinking: true, useReasoningEffort: true, unsupportedParams: ['thinking'], contextLength: 1048576 },
     },
   },
   {
@@ -28,15 +45,15 @@ const DEFAULT_PROVIDERS: Provider[] = [
     apiType: 'openai',
     consoleUrl: 'https://platform.deepseek.com',
     modelMetadata: {
-      'deepseek-v4-flash': { supportsVision: false, supportsThinking: true, contextLength: 64000 },
-      'deepseek-v4-pro':   { supportsVision: false, supportsThinking: true, contextLength: 64000 },
+      'deepseek-v4-flash': { supportsVision: false, supportsThinking: true, contextLength: 1048576 },
+      'deepseek-v4-pro':   { supportsVision: false, supportsThinking: true, contextLength: 1048576 },
     },
   },
   {
     id: 'qwen',
-    name: '阿里云百炼',
+    name: 'Qwen',
     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    models: ['qwen-turbo'],
+    models: ['qwen-turbo','qwen-vl-max','qwen-vl-plus'],
     apiType: 'openai',
     consoleUrl: 'https://bailian.console.aliyun.com',
     modelMetadata: {
@@ -47,13 +64,14 @@ const DEFAULT_PROVIDERS: Provider[] = [
   },
   {
     id: 'moonshot',
-    name: 'Moonshot',
+    name: 'kimi',
     baseUrl: 'https://api.moonshot.cn/v1',
-    models: ['moonshot-v1-8k', 'kimi-k2.6'],
+    models: ['moonshot-v1-8k', 'kimi-k2.5', 'kimi-k2.6'],
     apiType: 'openai',
     consoleUrl: 'https://platform.moonshot.cn',
     modelMetadata: {
       'moonshot-v1-8k': { supportsVision: false, supportsThinking: false, contextLength: 8192 },
+      'kimi-k2.5':      { supportsVision: true,  supportsThinking: false, contextLength: 131072 },
       'kimi-k2.6':      { supportsVision: true,  supportsThinking: false, contextLength: 131072 },
     },
   },
@@ -90,14 +108,26 @@ const DEFAULT_PROVIDERS: Provider[] = [
     },
   },
   {
+    id: 'xai',
+    name: 'xAI',
+    baseUrl: 'https://api.x.ai/v1',
+    models: ['grok-3', 'grok-3-fast', 'grok-3-mini', 'grok-2'],
+    apiType: 'openai',
+    consoleUrl: 'https://console.x.ai',
+    modelMetadata: {
+      'grok-3':      { supportsVision: true, supportsThinking: true,  contextLength: 131072 },
+      'grok-3-fast': { supportsVision: true, supportsThinking: true,  contextLength: 131072 },
+      'grok-3-mini': { supportsVision: true, supportsThinking: true,  contextLength: 131072 },
+      'grok-2':      { supportsVision: true, supportsThinking: false, contextLength: 131072 },
+    },
+  },
+  {
     id: 'mimo',
     name: 'MiMo',
     baseUrl: 'https://api.xiaomimimo.com/v1',
     models: ['mimo-v2.5-pro', 'mimo-v2.5', 'mimo-v2-flash'],
     apiType: 'openai',
     consoleUrl: 'https://platform.xiaomimimo.com/console/api-keys',
-    apiKeyHint: 'hintMiMoApiKey',
-    apiUrlHint: 'hintMiMoUrl',
     modelMetadata: {
       'mimo-v2.5': { supportsVision: true, supportsThinking: false, contextLength: 131072 },
     },
@@ -165,6 +195,8 @@ export const MODEL_CAPABILITIES: Record<string, {
   supportsVision: boolean
   supportsThinking: boolean
   contextLength: number
+  unsupportedParams?: string[]
+  useReasoningEffort?: boolean
 }> = Object.fromEntries(
   DEFAULT_PROVIDERS.flatMap(p =>
     Object.entries(p.modelMetadata ?? {})
@@ -173,6 +205,8 @@ export const MODEL_CAPABILITIES: Record<string, {
         supportsVision: m.supportsVision,
         supportsThinking: m.supportsThinking,
         contextLength: m.contextLength!,
+        ...(m.unsupportedParams ? { unsupportedParams: m.unsupportedParams } : {}),
+        ...(m.useReasoningEffort ? { useReasoningEffort: m.useReasoningEffort } : {}),
       }])
   )
 )
@@ -194,12 +228,30 @@ export const DEFAULT_MODEL_PARAMS: ModelParams = {
 }
 
 
+// 话题名生成提示词
+export function getTopicNamePrompt(isZh: boolean, style: string, convPrompt?: string): string {
+  if (style === 'prompt' && convPrompt) {
+    return isZh
+      ? `系统提示词：\n${convPrompt}\n\n请完成两步：\n1. 用2-4个字概括系统提示词的核心角色（如"翻译助手""代码审查""文案写作"）\n2. 根据对话内容生成简短的主题词（不超过6个字）\n\n输出格式：角色-主题\n只输出结果，不要其他内容。使用中文。`
+      : `System prompt:\n${convPrompt}\n\nDo two steps:\n1. Summarize the system prompt's core role in 2-4 words (e.g. "Translator", "Code Review", "Copywriter")\n2. Generate a short topic from the conversation (max 6 words)\n\nOutput format: Role-Topic\nOutput ONLY the result. Use English.`
+  }
+  if (style === 'emoji') {
+    return isZh
+      ? '根据对话内容生成简短的对话标题（不超过10个字），在标题开头加入一个合适的 emoji。只输出标题，不要输出其他内容。使用中文。'
+      : 'Generate a short conversation title (max 10 characters) based on the conversation content, include a suitable emoji at the beginning. Output ONLY the title, nothing else. Use English.'
+  }
+  return isZh
+    ? '根据对话内容生成简短的对话标题（不超过10个字）。使用中文。标题语言与用户的首要语言一致，不要使用标点符号和其他特殊符号。'
+    : 'Generate a short conversation title (max 10 characters) based on the conversation content. Output ONLY the title, nothing else. Use English.'
+}
 
 export const DEFAULT_UI_CONFIG: UIConfig = {
   fontSize: 'base',
   chatWidth: 'compact',
   autoCollapseCode: false,
   autoHideThinking: true,
+  topicNameCount: 6,
+  topicNameStyle: 'normal',
   prompts: DEFAULT_PROMPTS,
   theme: 'system',
   language: 'zh',

@@ -1,4 +1,5 @@
-import type { ModelParams } from './types'
+import type { ModelParams, ModelMetadata } from './types'
+import { buildModelParamsBody } from './utils/modelParamsFilter'
 import i18n from './i18n'
 
 export interface StreamOptions {
@@ -8,6 +9,7 @@ export interface StreamOptions {
   messages: { role: string; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> }[]
   systemPrompt?: string
   modelParams?: Partial<ModelParams>
+  modelMetadata?: ModelMetadata
   useCorsProxy?: boolean
   corsProxyUrl?: string
   abortSignal?: AbortSignal
@@ -41,7 +43,7 @@ function formatError(summary: string, ...details: string[]): string {
 }
 
 export async function streamChat(options: StreamOptions) {
-  const { baseUrl, apiKey, model, messages, systemPrompt, modelParams, useCorsProxy, corsProxyUrl, abortSignal, onChunk, onError, onComplete } = options
+  const { baseUrl, apiKey, model, messages, systemPrompt, modelParams, modelMetadata, useCorsProxy, corsProxyUrl, abortSignal, onChunk, onError, onComplete } = options
 
   const allMessages = systemPrompt
     ? [{ role: 'system', content: systemPrompt }, ...messages]
@@ -54,15 +56,21 @@ export async function streamChat(options: StreamOptions) {
       stream: true,
     }
 
-    // 添加模型参数
+    // 添加模型参数（过滤不支持的参数）
     if (modelParams) {
-      if (modelParams.temperature !== undefined) body.temperature = modelParams.temperature
-      if (modelParams.top_p !== undefined) body.top_p = modelParams.top_p
-      if (modelParams.max_tokens) body.max_tokens = modelParams.max_tokens
-      if (modelParams.presence_penalty !== undefined) body.presence_penalty = modelParams.presence_penalty
-      if (modelParams.frequency_penalty !== undefined) body.frequency_penalty = modelParams.frequency_penalty
+      const paramsBody = buildModelParamsBody(modelParams as ModelParams, modelMetadata, model)
+      Object.assign(body, paramsBody)
+
       // 思考模式
-      if (options.modelSupportsThinking) {
+      const thinkingUnsupported = modelMetadata?.unsupportedParams?.includes('thinking')
+      if (modelMetadata?.useReasoningEffort || thinkingUnsupported) {
+        // Gemini 等模型：使用 reasoning_effort 参数
+        if (modelParams.thinkingEnabled && modelParams.thinkingLevel) {
+          body.reasoning_effort = modelParams.thinkingLevel
+        } else {
+          body.reasoning_effort = 'none'
+        }
+      } else if (options.modelSupportsThinking) {
         if (modelParams.thinkingEnabled) {
           body.thinking = {
             type: 'enabled'
@@ -189,4 +197,55 @@ export async function streamChat(options: StreamOptions) {
       onError(err)
     }
   }
+}
+
+export interface ChatCompletionOptions {
+  baseUrl: string
+  apiKey: string
+  model: string
+  messages: { role: string; content: string }[]
+  systemPrompt?: string
+  useCorsProxy?: boolean
+  corsProxyUrl?: string
+  abortSignal?: AbortSignal
+}
+
+export async function chatCompletion(options: ChatCompletionOptions): Promise<string> {
+  const { baseUrl, apiKey, model, messages, systemPrompt, useCorsProxy, corsProxyUrl, abortSignal } = options
+
+  const allMessages = systemPrompt
+    ? [{ role: 'system', content: systemPrompt }, ...messages]
+    : messages
+
+  const body: Record<string, unknown> = {
+    model,
+    messages: allMessages,
+    stream: false,
+  }
+
+  const apiBaseUrl = buildApiUrl(baseUrl, useCorsProxy, corsProxyUrl)
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
+
+  const response = await fetch(`${apiBaseUrl}/chat/completions`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+    signal: abortSignal,
+  })
+
+  if (!response.ok) {
+    let detail = ''
+    try {
+      const errorBody = await response.text()
+      const errorJson = JSON.parse(errorBody)
+      detail = errorJson.error?.message || errorJson.message || errorBody.slice(0, 500)
+    } catch { /* ignore */ }
+    const lines: string[] = [`${response.status} ${response.statusText}`]
+    if (detail) lines.push(detail)
+    throw new Error(formatError(getHttpErrorSummary(response.status), ...lines))
+  }
+
+  const data = await response.json()
+  return data.choices?.[0]?.message?.content?.trim() || ''
 }

@@ -27,3 +27,5 @@ constants.local.ts
 
 # Claude
 .claude/
+
+samples/

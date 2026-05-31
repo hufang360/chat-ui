@@ -3,10 +3,13 @@ import react from '@vitejs/plugin-react'
 import { viteSingleFile } from 'vite-plugin-singlefile'
 import path from 'path'
 
+const isCrx = process.env.MODE === 'crx'
+
 export default defineConfig({
+  base: isCrx ? './' : '/',
   plugins: [
     react(),
-    viteSingleFile(),
+    ...(!isCrx ? [viteSingleFile()] : []),
   ],
   resolve: {
     alias: {
@@ -15,10 +18,12 @@ export default defineConfig({
   },
   build: {
     target: 'esnext',
-    assetsInlineLimit: 100000000,
-    chunkSizeWarningLimit: 100000000,
     cssCodeSplit: false,
-    brotliSize: false,
+    ...(!isCrx && {
+      assetsInlineLimit: 100000000,
+      chunkSizeWarningLimit: 100000000,
+      brotliSize: false,
+    }),
   },
   test: {
     globals: true,

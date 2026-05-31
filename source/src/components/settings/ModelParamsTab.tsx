@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Slider } from '@/components/ui/slider'
 import { Select } from '@/components/ui/select'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { RotateCcw, Info } from 'lucide-react'
 
 const MAX_TOKENS_PRESETS = new Set(['0', '4096', '8192', '20480', '200000', '1000000'])
@@ -52,16 +52,16 @@ export const ModelParamsTab = forwardRef<ModelParamsTabHandle>(
               <div className="flex justify-between">
                 <div className="flex items-center gap-1">
                   <Label className="text-xs font-medium">Temperature</Label>
-                  <Tooltip>
-                    <TooltipTrigger render={(props) => (
-                      <Button {...props} size="icon" variant="ghost" className="size-5">
+                  <Popover>
+                    <PopoverTrigger render={(props) => (
+                      <Button {...props} size="icon" variant="ghost" className="size-5" aria-label={t('temperatureDesc')}>
                         <Info className="size-3 text-muted-foreground" />
                       </Button>
                     )} />
-                    <TooltipContent side="top" className="text-2xs px-2 py-1 max-w-64">
+                    <PopoverContent side="top" align="start" className="w-64 text-2xs leading-relaxed p-3">
                       {t('temperatureDesc')}
-                    </TooltipContent>
-                  </Tooltip>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 <span className="text-xs text-muted-foreground">{localModelParams.temperature}</span>
               </div>
@@ -73,16 +73,16 @@ export const ModelParamsTab = forwardRef<ModelParamsTabHandle>(
               <div className="flex justify-between">
                 <div className="flex items-center gap-1">
                   <Label className="text-xs font-medium">Top P</Label>
-                  <Tooltip>
-                    <TooltipTrigger render={(props) => (
-                      <Button {...props} size="icon" variant="ghost" className="size-5">
+                  <Popover>
+                    <PopoverTrigger render={(props) => (
+                      <Button {...props} size="icon" variant="ghost" className="size-5" aria-label={t('topPDesc')}>
                         <Info className="size-3 text-muted-foreground" />
                       </Button>
                     )} />
-                    <TooltipContent side="top" className="text-2xs px-2 py-1 max-w-64">
+                    <PopoverContent side="top" align="start" className="w-64 text-2xs leading-relaxed p-3">
                       {t('topPDesc')}
-                    </TooltipContent>
-                  </Tooltip>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 <span className="text-xs text-muted-foreground">{localModelParams.top_p}</span>
               </div>
@@ -156,8 +156,10 @@ export const ModelParamsTab = forwardRef<ModelParamsTabHandle>(
 
         {/* 重置确认弹窗 */}
         {resetConfirmOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80" onClick={() => setResetConfirmOpen(false)}>
-            <div className="bg-background border rounded-lg shadow-lg p-4 w-80 flex flex-col gap-4" onClick={e => e.stopPropagation()}>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80" onClick={() => setResetConfirmOpen(false)}
+            onKeyDown={(e) => { if (e.key === 'Escape') setResetConfirmOpen(false) }}
+          >
+            <div className="bg-background border rounded-lg shadow-lg p-4 w-80 flex flex-col gap-4" role="dialog" aria-modal="true" aria-label={t('confirmResetModelParams')} onClick={e => e.stopPropagation()}>
               <p className="text-sm">{t('confirmResetModelParams')}</p>
               <div className="flex justify-end gap-2">
                 <Button size="sm" variant="outline" onClick={() => setResetConfirmOpen(false)}>{t('cancel')}</Button>

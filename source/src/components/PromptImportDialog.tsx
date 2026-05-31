@@ -40,6 +40,7 @@ export function PromptImportDialog({ open, importUrl, onOpenChange, onUrlChange,
               onChange={e => onUrlChange(e.target.value)}
               className="h-7 text-2xs rounded-r-none border-0 border-r focus-visible:ring-0"
               placeholder={t('enterPromptJsonUrl')}
+              aria-label={t('enterPromptJsonUrl')}
             />
             <Button
               variant="outline"

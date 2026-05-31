@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useStore } from './store'
-import { APP_VERSION } from './constants.base'
+import { APP_VERSION, generateId } from './constants.base'
 import { useChat } from './hooks/useChat'
 import { TooltipProvider } from './components/ui/tooltip'
 import { toast } from 'sonner'
@@ -12,21 +12,20 @@ import { SettingsDialog } from './components/SettingsDialog'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { PopoverConfirm } from './components/PopoverConfirm'
 import { Moon, Sun, Monitor } from 'lucide-react'
+import type { Conversation } from './types'
 
 function App() {
-  const {
-    conversations,
-    currentConversationId,
-    selectedModel,
-    globalSystemPrompt,
-    modelParams: storeModelParams,
-    uiConfig,
-    createConversation,
-    setUIConfig,
-    switchConversation,
-    setTheme,
-    getTheme,
-  } = useStore()
+  const conversations = useStore(s => s.conversations)
+  const currentConversationId = useStore(s => s.currentConversationId)
+  const selectedModel = useStore(s => s.selectedModel)
+  const globalSystemPrompt = useStore(s => s.globalSystemPrompt)
+  const storeModelParams = useStore(s => s.modelParams)
+  const uiConfig = useStore(s => s.uiConfig)
+  const createConversation = useStore(s => s.createConversation)
+  const setUIConfig = useStore(s => s.setUIConfig)
+  const switchConversation = useStore(s => s.switchConversation)
+  const setTheme = useStore(s => s.setTheme)
+  const getTheme = useStore(s => s.getTheme)
 
   const { isLoading, streamingContent, streamingThinking, sendMessage, stopGeneration, regenerate } = useChat()
 
@@ -34,6 +33,7 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsInitialProviderId, setSettingsInitialProviderId] = useState<string | undefined>()
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 768)
+  const [editingTitle, setEditingTitle] = useState(false)
 
   // 移动端（<768px）自动隐藏侧栏
   useEffect(() => {
@@ -42,7 +42,7 @@ function App() {
     mq.addEventListener('change', handler)
     return () => mq.removeEventListener('change', handler)
   }, [])
-  const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; title: string; message: string; onConfirm: () => void }>({
+  const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; title: string; message: string; onConfirm: () => void; thirdLabel?: string; onThirdAction?: () => void }>({
     open: false, title: '', message: '', onConfirm: () => {}
   })
   const [popoverConfirm, setPopoverConfirm] = useState<{ open: boolean; x: number; y: number; onConfirm: () => void }>({
@@ -53,6 +53,8 @@ function App() {
 
   const configImportInputRef = useRef<HTMLInputElement>(null)
   const promptImportInputRef = useRef<HTMLInputElement>(null)
+  const mdInputRef = useRef<HTMLInputElement>(null)
+  const jsonlInputRef = useRef<HTMLInputElement>(null)
 
   // 启动时创建默认对话
   useEffect(() => {
@@ -156,7 +158,7 @@ function App() {
   }, [uiConfig.theme, getTheme])
 
   // 三态循环切换：system → light → dark → system
-  const handleThemeToggle = () => {
+  const handleThemeToggle = useCallback(() => {
     const theme = uiConfig.theme || 'system'
     if (theme === 'system') {
       setTheme('light')
@@ -165,38 +167,233 @@ function App() {
     } else {
       setTheme('system')
     }
-  }
+  }, [uiConfig.theme, setTheme])
 
   // 获取当前主题图标
-  const getThemeIcon = () => {
+  const themeIcon = useMemo(() => {
     const theme = uiConfig.theme || 'system'
     const currentTheme = getTheme()
     if (theme === 'system') {
       return <Monitor className="size-3" />
     }
     return currentTheme === 'dark' ? <Moon className="size-3" /> : <Sun className="size-3" />
-  }
+  }, [uiConfig.theme, getTheme])
 
   // 显示气泡确认框
-  const showPopoverConfirm = (x: number, y: number, onConfirm: () => void) => {
+  const showPopoverConfirm = useCallback((x: number, y: number, onConfirm: () => void) => {
     setPopoverConfirm({ open: true, x, y, onConfirm })
-  }
+  }, [])
 
   // 显示模态确认框
-  const showConfirm = (title: string, message: string, onConfirm: () => void) => {
-    setConfirmDialog({ open: true, title, message, onConfirm })
-  }
+  const showConfirm = useCallback((title: string, message: string, onConfirm: () => void, thirdLabel?: string, onThirdAction?: () => void) => {
+    setConfirmDialog({ open: true, title, message, onConfirm, thirdLabel, onThirdAction })
+  }, [])
 
   // 停止生成并切换对话
-  const handleStopAndSwitch = (id: string) => {
+  const handleStopAndSwitch = useCallback((id: string) => {
     if (isLoading) stopGeneration()
     switchConversation(id)
-  }
+  }, [isLoading, stopGeneration, switchConversation])
 
   // 停止生成并新建对话
-  const handleStopAndCreate = () => {
+  const handleStopAndCreate = useCallback(() => {
     if (isLoading) stopGeneration()
     createConversation()
+  }, [isLoading, stopGeneration, createConversation])
+
+  // 清理空对话
+  const handleCleanEmptyChats = useCallback(() => {
+    const emptyIds = conversations.filter(c => c.messages.length === 0).map(c => c.id)
+    if (emptyIds.length === 0) { toast.info(t('noEmptyChats')); return }
+    const currentId = useStore.getState().currentConversationId
+    const remaining = conversations.filter(c => c.messages.length > 0)
+    useStore.setState({
+      conversations: remaining,
+      currentConversationId: remaining.length > 0
+        ? (emptyIds.includes(currentId!) ? remaining[0].id : currentId)
+        : null,
+    })
+    toast.success(t('emptyChatsCleaned', { count: emptyIds.length }))
+  }, [conversations, t])
+
+  // 导入 Markdown 文件
+  const handleImportMarkdown = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files?.length) return
+    const existing = useStore.getState().conversations
+    const existingIds = new Set(existing.map(c => c.id))
+    const imported: Conversation[] = []
+    for (const file of Array.from(files)) {
+      try {
+        const content = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = (ev) => resolve(ev.target?.result as string)
+          reader.onerror = () => reject(new Error('File read error'))
+          reader.readAsText(file)
+        })
+        const conv = parseMarkdownToConversation(content)
+        if (existingIds.has(conv.id)) conv.id = generateId()
+        existingIds.add(conv.id)
+        imported.push(conv)
+      } catch {
+        toast.error(t('chatImportFailed'))
+      }
+    }
+    if (imported.length > 0) {
+      useStore.setState({
+        conversations: [...imported, ...existing],
+        currentConversationId: imported[imported.length - 1].id,
+      })
+      toast.success(t('chatImported', { count: imported.length }))
+    }
+    e.target.value = ''
+  }
+
+  // 解析 Markdown（含 Front Matter）为对话
+  const parseMarkdownToConversation = (content: string): Conversation => {
+    let id = generateId()
+    let title = ''
+    let createdAt = Date.now()
+    let updatedAt = Date.now()
+    let systemPrompt: string | undefined
+    let body = content
+
+    const fmMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/)
+    if (fmMatch) {
+      const fm = fmMatch[1]
+      body = fmMatch[2]
+      const get = (key: string) => fm.match(new RegExp(`^${key}:\\s*"?(.*?)"?$`, 'm'))?.[1]
+      const idVal = get('id')
+      if (idVal) id = idVal
+      const titleVal = get('title')
+      if (titleVal) title = titleVal
+      const created = get('createdAt')
+      if (created) { const t = new Date(created).getTime(); if (!isNaN(t)) createdAt = t }
+      const updated = get('updatedAt')
+      if (updated) { const t = new Date(updated).getTime(); if (!isNaN(t)) updatedAt = t }
+      const sp = get('systemPrompt')
+      if (sp) systemPrompt = sp
+    }
+
+    if (!title) {
+      const titleMatch = body.match(/^#\s+(.+)$/m)
+      if (titleMatch) title = titleMatch[1]
+    }
+
+    const messages: Conversation['messages'] = []
+    const parts = body.split(/(^##\s+(?:\S+\s+)?(?:User|Assistant)\s*$)/m)
+    for (let i = 1; i < parts.length; i += 2) {
+      const headerLine = parts[i]
+      const content = parts[i + 1] || ''
+      const roleMatch = headerLine.match(/(User|Assistant)/)
+      if (!roleMatch) continue
+      const role = roleMatch[1].toLowerCase() as 'user' | 'assistant'
+      let raw = content.trim()
+      raw = raw.replace(/\n*---\s*$/, '').trim()
+      let thinking: string | undefined
+      const thinkMatch = raw.match(/^<div[^>]*>\s*<details[^>]*>\s*<summary>[\s\S]*?<\/summary>\s*([\s\S]*?)\s*<\/details>\s*<\/div>/m)
+      if (thinkMatch) {
+        const thinkContent = thinkMatch[1].replace(/<br\s*\/?>/g, '\n').replace(/<[^>]+>/g, '').trim()
+        if (thinkContent) thinking = thinkContent
+        raw = raw.replace(thinkMatch[0], '').trim()
+      }
+      if (raw) {
+        messages.push({ id: generateId(), role, content: raw, timestamp: Date.now(), ...(thinking ? { thinking } : {}) })
+      }
+    }
+
+    return { id, title, messages, createdAt, updatedAt, ...(systemPrompt ? { systemPrompt } : {}) }
+  }
+
+  // 导入 JSONL 文件
+  const handleImportJsonl = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files?.length) return
+    const imported: Conversation[] = []
+    for (const file of Array.from(files)) {
+      try {
+        imported.push(await parseJsonlFile(file))
+      } catch {
+        toast.error(t('jsonlImportFailed'))
+      }
+    }
+    if (imported.length > 0) {
+      const existing = useStore.getState().conversations
+      useStore.setState({
+        conversations: [...imported, ...existing],
+        currentConversationId: imported[0].id,
+      })
+      toast.success(t('jsonlImported', { count: imported.length }))
+    }
+    e.target.value = ''
+  }
+
+  // 解析单个 JSONL 文件为 Conversation
+  const parseJsonlFile = (file: File): Promise<Conversation> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = (ev) => {
+        try {
+          const content = ev.target?.result as string
+          const lines = content.split('\n').filter(line => line.trim())
+          const messages: Conversation['messages'] = []
+          let sessionId = ''
+          let aiTitle = ''
+
+          for (const line of lines) {
+            try {
+              const entry = JSON.parse(line)
+              if (entry.type === 'summary') {
+                if (entry.sessionId) sessionId = entry.sessionId
+                if (entry.aiTitle) aiTitle = entry.aiTitle
+                continue
+              }
+              if (entry.type === 'user' || entry.type === 'assistant') {
+                let text = ''
+                let thinking: string | undefined
+                if (typeof entry.content === 'string') {
+                  text = entry.content
+                } else if (Array.isArray(entry.content)) {
+                  const textItem = entry.content.find((c: any) => c.type === 'text')
+                  const thinkItem = entry.content.find((c: any) => c.type === 'thinking')
+                  if (textItem) text = textItem.text
+                  if (thinkItem) thinking = thinkItem.thinking
+                }
+                if (text.startsWith('<ide_selection>')) continue
+                if (text || thinking) {
+                  messages.push({
+                    id: generateId(),
+                    role: entry.type,
+                    content: text,
+                    timestamp: entry.timestamp || Date.now(),
+                    ...(thinking ? { thinking } : {}),
+                    ...(entry.model ? { model: entry.model } : {}),
+                  })
+                }
+              }
+            } catch { /* 跳过无效行 */ }
+          }
+
+          if (messages.length === 0) {
+            reject(new Error(t('jsonlNoMessages')))
+            return
+          }
+
+          const title = aiTitle || file.name.replace(/\.jsonl$/i, '') || t('untitled')
+          resolve({
+            id: sessionId || generateId(),
+            title,
+            messages,
+            createdAt: messages[0]?.timestamp || Date.now(),
+            updatedAt: messages[messages.length - 1]?.timestamp || Date.now(),
+          })
+        } catch (error) {
+          reject(error)
+        }
+      }
+      reader.onerror = () => reject(new Error('File read error'))
+      reader.readAsText(file)
+    })
   }
 
   // 导出所有配置为 JSON 文件
@@ -254,7 +451,18 @@ function App() {
 
   return (
     <TooltipProvider>
-      <div className="h-screen flex bg-background text-sm">
+      <div className="h-dvh flex bg-background text-sm overflow-hidden">
+        {/* Skip Link - 仅在获得焦点时可见 */}
+        <a
+          href="#chat-input"
+          className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:top-1 focus:left-1 focus:px-3 focus:py-1.5 focus:text-xs focus:bg-primary focus:text-primary-foreground focus:rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
+        >
+          {t('skipToInput')}
+        </a>
+        {/* 隐藏的文件输入 */}
+        <input ref={mdInputRef} type="file" accept=".md" multiple className="hidden" onChange={handleImportMarkdown} />
+        <input ref={jsonlInputRef} type="file" accept=".jsonl" multiple className="hidden" onChange={handleImportJsonl} />
+
         {/* 侧边栏 */}
         <Sidebar
           sidebarOpen={sidebarOpen}
@@ -263,6 +471,10 @@ function App() {
           onStopAndCreateConversation={handleStopAndCreate}
           onOpenSettings={() => setSettingsOpen(true)}
           onCloseSidebar={() => setSidebarOpen(false)}
+          onShowConfirm={showConfirm}
+          onImportMarkdown={() => mdInputRef.current?.click()}
+          onImportJsonl={() => jsonlInputRef.current?.click()}
+          onCleanEmptyChats={handleCleanEmptyChats}
         />
 
         {/* 聊天区域 */}
@@ -287,8 +499,10 @@ function App() {
           onPendingTextConsumed={() => setPendingText(null)}
           onAutoSendConsumed={() => setAutoSend(false)}
           onThemeToggle={handleThemeToggle}
-          themeIcon={getThemeIcon()}
+          themeIcon={themeIcon}
           currentTheme={uiConfig.theme || 'system'}
+          editingTitle={editingTitle}
+          onEditingTitleDone={() => setEditingTitle(false)}
         />
 
         {/* 设置对话框 */}
@@ -313,6 +527,8 @@ function App() {
           open={confirmDialog.open}
           title={confirmDialog.title}
           message={confirmDialog.message}
+          thirdLabel={confirmDialog.thirdLabel}
+          onThirdAction={confirmDialog.onThirdAction}
           onOpenChange={(open) => setConfirmDialog(prev => ({ ...prev, open }))}
           onConfirm={() => {
             confirmDialog.onConfirm()

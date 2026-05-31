@@ -12,7 +12,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     <button
       data-slot="button"
       className={cn(
-        "inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors outline-none select-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+        "inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors outline-none focus-visible:ring-1 focus-visible:ring-ring select-none disabled:opacity-50 aria-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
         {
           "bg-primary text-primary-foreground shadow hover:bg-primary/90": variant === "default",
           "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90": variant === "destructive",

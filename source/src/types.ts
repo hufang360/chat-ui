@@ -24,12 +24,21 @@ export interface Conversation {
   systemPrompt?: string
   createdAt: number
   updatedAt: number
+  folderId?: string
+}
+
+export interface Folder {
+  id: string
+  name: string
+  createdAt: number
 }
 
 export interface ModelMetadata {
   supportsVision: boolean
   supportsThinking: boolean
   contextLength?: number
+  unsupportedParams?: string[]
+  useReasoningEffort?: boolean
 }
 
 export interface Provider {
@@ -70,6 +79,10 @@ export interface UIConfig {
   chatWidth: 'compact' | 'full'
   autoCollapseCode: boolean
   autoHideThinking: boolean
+  topicNameCount: 3 | 6 | 9
+  topicNameStyle: 'normal' | 'emoji' | 'prompt'
+  autoGenerateTopicName?: boolean
+  injectMetadata?: boolean
   corsProxyUrl?: string
   prompts?: Prompt[]
   theme?: 'light' | 'dark' | 'system'

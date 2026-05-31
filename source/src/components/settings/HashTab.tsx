@@ -97,6 +97,7 @@ export function HashTab() {
                 <InputGroupButton
                   variant="secondary"
                   onClick={() => window.open(editUrls[i] || item.url, '_blank')}
+                  aria-label={t('openLink')}
                 >
                   <ExternalLink className="size-3 text-muted-foreground" />
                 </InputGroupButton>

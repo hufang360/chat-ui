@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import type { Conversation, Message, Provider, ModelParams, Prompt, UIConfig } from './types'
+import type { Conversation, Message, Provider, ModelParams, Prompt, UIConfig, Folder } from './types'
 import { generateId, DEFAULT_PROVIDERS_WITH_FLAGS, DEFAULT_MODEL_PARAMS, DEFAULT_UI_CONFIG } from './constants'
 import i18n from './i18n'
 
@@ -13,6 +13,7 @@ interface StoreState {
   globalSystemPrompt: string
   modelParams: ModelParams
   uiConfig: UIConfig
+  folders: Folder[]
 
   // 会话管理
   createConversation: () => string
@@ -24,10 +25,18 @@ interface StoreState {
   setConversationSystemPrompt: (id: string, prompt: string) => void
   getCurrentConversation: () => Conversation | null
 
+  // 文件夹管理
+  createFolder: (name: string) => string
+  deleteFolder: (id: string) => void
+  renameFolder: (id: string, name: string) => void
+  moveConversationToFolder: (convId: string, folderId: string | null) => void
+  reorderFolder: (fromId: string, toId: string) => void
+
   // 消息管理
   addMessage: (message: Omit<Message, 'id' | 'timestamp'>) => void
   updateMessage: (id: string, content: string) => void
   deleteMessage: (id: string) => void
+  clearMessages: (id: string) => void
 
   // 供应商管理
   addProvider: (provider: Provider) => void
@@ -70,6 +79,7 @@ type PersistedState = Pick<StoreState,
   | 'globalSystemPrompt'
   | 'modelParams'
   | 'uiConfig'
+  | 'folders'
 >
 
 // 取首条用户消息前30字符作为会话标题
@@ -91,6 +101,7 @@ export const useStore = create<StoreState>()(
       globalSystemPrompt: 'respond in chinese.',
       modelParams: DEFAULT_MODEL_PARAMS,
       uiConfig: DEFAULT_UI_CONFIG,
+      folders: [],
 
       // 新会话插入列表头部
       createConversation: () => {
@@ -105,6 +116,7 @@ export const useStore = create<StoreState>()(
           systemPrompt,
           createdAt: Date.now(),
           updatedAt: Date.now(),
+          folderId: current?.folderId,
         }
         set((state) => ({
           conversations: [newConversation, ...state.conversations],
@@ -146,7 +158,7 @@ export const useStore = create<StoreState>()(
         return { conversations }
       }),
 
-      // 深拷贝：为消息和话题重新生成 ID
+      // 深拷贝：为消息和对话重新生成 ID
       duplicateConversation: (id) => {
         const idToUse = id
         let newId = ''
@@ -180,6 +192,44 @@ export const useStore = create<StoreState>()(
         const state = get()
         return state.conversations.find(c => c.id === state.currentConversationId) || null
       },
+
+      // 文件夹管理
+      createFolder: (name) => {
+        const id = generateId()
+        set((state) => ({
+          folders: [...state.folders, { id, name, createdAt: Date.now() }],
+        }))
+        return id
+      },
+
+      deleteFolder: (id) => set((state) => ({
+        folders: state.folders.filter(f => f.id !== id),
+        conversations: state.conversations.map(c =>
+          c.folderId === id ? { ...c, folderId: undefined } : c
+        ),
+      })),
+
+      renameFolder: (id, name) => set((state) => ({
+        folders: state.folders.map(f =>
+          f.id === id ? { ...f, name } : f
+        ),
+      })),
+
+      moveConversationToFolder: (convId, folderId) => set((state) => ({
+        conversations: state.conversations.map(c =>
+          c.id === convId ? { ...c, folderId: folderId || undefined } : c
+        ),
+      })),
+
+      reorderFolder: (fromId, toId) => set((state) => {
+        const folders = [...state.folders]
+        const fromIndex = folders.findIndex(f => f.id === fromId)
+        const toIndex = folders.findIndex(f => f.id === toId)
+        if (fromIndex === -1 || toIndex === -1) return state
+        const [removed] = folders.splice(fromIndex, 1)
+        folders.splice(toIndex, 0, removed)
+        return { folders }
+      }),
 
       // 无当前会话时自动创建一个
       addMessage: (message) => {
@@ -231,6 +281,12 @@ export const useStore = create<StoreState>()(
           messages: c.messages.filter(m => m.id !== id),
           updatedAt: Date.now(),
         })),
+      })),
+
+      clearMessages: (id) => set((state) => ({
+        conversations: state.conversations.map(c =>
+          c.id === id ? { ...c, messages: [], updatedAt: Date.now() } : c
+        ),
       })),
 
       addProvider: (provider) => set((state) => ({
@@ -400,6 +456,7 @@ export const useStore = create<StoreState>()(
         globalSystemPrompt: state.globalSystemPrompt,
         modelParams: state.modelParams,
         uiConfig: state.uiConfig,
+        folders: state.folders,
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {
@@ -412,6 +469,17 @@ export const useStore = create<StoreState>()(
             if (!p.consoleUrl && preset.consoleUrl) patch.consoleUrl = preset.consoleUrl
             if (!p.apiKeyHint && preset.apiKeyHint) patch.apiKeyHint = preset.apiKeyHint
             if (!p.apiUrlHint && preset.apiUrlHint) patch.apiUrlHint = preset.apiUrlHint
+            // 合并预设 modelMetadata（补齐 useReasoningEffort、unsupportedParams 等新字段）
+            if (preset.modelMetadata) {
+              const merged = { ...preset.modelMetadata, ...(p.modelMetadata || {}) }
+              for (const [key, presetMeta] of Object.entries(preset.modelMetadata)) {
+                const existing = p.modelMetadata?.[key]
+                if (existing) {
+                  merged[key] = { ...presetMeta, ...existing }
+                }
+              }
+              patch.modelMetadata = merged
+            }
             if (Object.keys(patch).length) { patched = true; return { ...p, ...patch } }
             return p
           })

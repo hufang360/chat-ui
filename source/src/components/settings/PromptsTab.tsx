@@ -8,8 +8,9 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { POPOVER_OFFSET } from '../../utils/settingsUtils'
-import { Plus, Download, Upload, Lightbulb, GripVertical, ChevronLeft, ChevronRight, Trash2, RotateCcw, Info, Hash } from 'lucide-react'
+import { Plus, Download, Upload, Lightbulb, ChevronLeft, ChevronRight, Trash2, RotateCcw, Info, Hash } from 'lucide-react'
 
 export interface PromptsTabProps {
   onShowPopoverConfirm: (x: number, y: number, onConfirm: () => void) => void
@@ -23,6 +24,7 @@ export function PromptsTab({ onShowPopoverConfirm, promptImportInputRef }: Promp
   const [selectedPromptIndex, setSelectedPromptIndex] = useState<number | null>(null)
   const [draggedPromptIndex, setDraggedPromptIndex] = useState<number | null>(null)
   const [dragOverPromptIndex, setDragOverPromptIndex] = useState<number | null>(null)
+  const [dragOverPromptPos, setDragOverPromptPos] = useState<'top' | 'bottom'>('bottom')
   const promptContentInputRef = useRef<HTMLTextAreaElement>(null)
   const promptNameInputRef = useRef<HTMLInputElement>(null)
   const dragGhostRef = useRef<HTMLElement | null>(null)
@@ -87,32 +89,61 @@ export function PromptsTab({ onShowPopoverConfirm, promptImportInputRef }: Promp
   return (
     <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
       {/* 提示词列表 */}
-      <div className={`${mobileDetail ? 'hidden md:flex' : 'flex'} w-full md:w-44 border-b md:border-b-0 md:border-r p-3 flex-col overflow-hidden min-h-0 md:shrink-0`}>
+      <div className={`${mobileDetail ? 'hidden md:flex' : 'flex'} w-full md:w-44 border-b md:border-b-0 md:border-r flex-col overflow-hidden min-h-0 md:shrink-0`}>
         <div className="flex items-center justify-between">
-          <Label className="text-xs font-medium text-muted-foreground">{t('promptList')}</Label>
-          <Tooltip>
-            <TooltipTrigger render={(props) => (
-              <Button {...props} size="icon" variant="ghost" className="size-5"
-                onClick={() => {
-                  const prompt = { id: generateShortId(), name: t('newPrompt'), content: '' }
-                  addPrompt(prompt)
-                  const newIndex = prompts.length
-                  setSelectedPromptIndex(newIndex)
-                  setMobileDetail(true)
-                  requestAnimationFrame(() => promptContentInputRef.current?.focus())
-                }}
-              >
-                <Plus className="size-3" />
-              </Button>
-            )} />
-            <TooltipContent side="top" className="text-2xs px-2 py-1">{t('addPrompt')}</TooltipContent>
-          </Tooltip>
+          <Label className="text-2xs text-muted-foreground px-4 pt-2">{t('promptList')}</Label>
+          <div className="flex items-center gap-0.5 pt-1 pr-1">
+            <Tooltip>
+              <TooltipTrigger render={(props) => (
+                <Button {...props} size="icon" variant="ghost" className="size-5"
+                  onClick={() => {
+                    const prompt = { id: generateShortId(), name: t('newPrompt'), content: '' }
+                    addPrompt(prompt)
+                    const newIndex = prompts.length
+                    setSelectedPromptIndex(newIndex)
+                    setMobileDetail(true)
+                    requestAnimationFrame(() => promptContentInputRef.current?.focus())
+                  }}
+                  aria-label={t('addPrompt')}
+                >
+                  <Plus className="size-3" />
+                </Button>
+              )} />
+              <TooltipContent side="top" className="text-2xs px-2 py-1">{t('addPrompt')}</TooltipContent>
+            </Tooltip>
+          </div>
         </div>
         {/* 提示词列表 */}
-        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col gap-1 mt-1">
-          {prompts.map((prompt, index) => (
-            <div key={index} className="group relative flex"
-              onDragOver={(e) => { e.preventDefault(); setDragOverPromptIndex(index) }}
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col gap-1 mt-1 px-1">
+          {prompts.map((prompt, index) => {
+            const isDragOver = dragOverPromptIndex === index
+            const dropLine = isDragOver
+              ? dragOverPromptPos === 'top'
+                ? 'before:absolute before:inset-x-1 before:-top-0.5 before:h-0 before:border-t-2 before:border-dashed before:border-primary before:z-10'
+                : 'before:absolute before:inset-x-1 before:-bottom-0.5 before:h-0 before:border-t-2 before:border-dashed before:border-primary before:z-10'
+              : ''
+            return (
+            <div key={index} className={`group relative flex ${dropLine}`}
+              draggable
+              onDragStart={(e) => {
+                setDraggedPromptIndex(index)
+                const ghost = e.currentTarget.cloneNode(true) as HTMLElement
+                ghost.style.position = 'absolute'
+                ghost.style.top = '-9999px'
+                ghost.style.width = e.currentTarget.offsetWidth + 'px'
+                ghost.style.opacity = '0.85'
+                ghost.style.pointerEvents = 'none'
+                document.body.appendChild(ghost)
+                e.dataTransfer.setDragImage(ghost, 0, 0)
+                dragGhostRef.current = ghost
+              }}
+              onDragOver={(e) => {
+                e.preventDefault()
+                const rect = e.currentTarget.getBoundingClientRect()
+                setDragOverPromptIndex(index)
+                setDragOverPromptPos(e.clientY < rect.top + rect.height / 2 ? 'top' : 'bottom')
+              }}
+              onDragLeave={() => { if (dragOverPromptIndex === index) setDragOverPromptIndex(null) }}
               onDragEnd={() => {
                 if (draggedPromptIndex !== null && dragOverPromptIndex !== null && draggedPromptIndex !== dragOverPromptIndex) {
                   reorderPrompts(draggedPromptIndex, dragOverPromptIndex)
@@ -121,26 +152,6 @@ export function PromptsTab({ onShowPopoverConfirm, promptImportInputRef }: Promp
                 if (dragGhostRef.current) { document.body.removeChild(dragGhostRef.current); dragGhostRef.current = null }
               }}
             >
-              <span className="absolute left-0.5 top-1/2 -translate-y-1/2 cursor-grab opacity-0 group-hover:opacity-100 z-10 hidden md:block"
-                draggable
-                onDragStart={(e) => {
-                  e.stopPropagation(); setDraggedPromptIndex(index)
-                  const row = (e.currentTarget as HTMLElement).closest('.group') as HTMLElement
-                  if (row) {
-                    const ghost = row.cloneNode(true) as HTMLElement
-                    ghost.style.position = 'absolute'
-                    ghost.style.top = '-9999px'
-                    ghost.style.width = row.offsetWidth + 'px'
-                    ghost.style.opacity = '0.85'
-                    ghost.style.pointerEvents = 'none'
-                    document.body.appendChild(ghost)
-                    e.dataTransfer.setDragImage(ghost, 0, 0)
-                    dragGhostRef.current = ghost
-                  }
-                }}
-              >
-                <GripVertical className="size-3 text-muted-foreground" />
-              </span>
               <div className="flex-1 relative flex items-center">
                 <Button variant={selectedPromptIndex === index ? 'outline' : 'ghost'} size="sm"
                   className="flex-1 justify-start text-xs h-7 pr-1 truncate"
@@ -151,30 +162,29 @@ export function PromptsTab({ onShowPopoverConfirm, promptImportInputRef }: Promp
                 </Button>
               </div>
             </div>
-          ))}
+            )
+          })}
           {prompts.length === 0 && (
             <p className="text-2xs text-muted-foreground text-center py-2">{t('noPrompts')}</p>
           )}
         </div>
-        {/* 导入/导出 */}
-        <div className="shrink-0 flex flex-col gap-1 pt-2 border-t">
-          <div className="flex gap-1">
-            <Button size="sm" variant="outline" className="flex-1 h-6 text-2xs"
-              onClick={() => promptImportInputRef.current?.click()}
-            >
-              <Upload data-icon="inline-start" className="size-2.5 mr-0.5" />{t('import')}
-            </Button>
-            <Button size="sm" variant="outline" className="flex-1 h-6 text-2xs" onClick={handleExportPrompts}>
-              <Download data-icon="inline-start" className="size-2.5 mr-0.5" />{t('export')}
-            </Button>
-          </div>
-          <Button size="sm" variant="outline" className="w-full h-6 text-2xs" onClick={(e: React.MouseEvent) => {
-            onShowPopoverConfirm(e.clientX, e.clientY + POPOVER_OFFSET, () => {
-              setUIConfig({ prompts: DEFAULT_PROMPTS })
-              setSelectedPromptIndex(null)
-            })
-          }}>
-            <RotateCcw data-icon="inline-start" className="size-2.5 mr-0.5" />{t('reset')}
+        {/* 底部操作栏 */}
+        <div className="flex items-center justify-center gap-0.5 pt-1.5 pb-1 border-t shrink-0">
+          <Button size="sm" variant="ghost" className="h-6 text-2xs px-2 pr-2 gap-0.5" onClick={() => promptImportInputRef.current?.click()}>
+            <Upload className="size-3" />{t('import')}
+          </Button>
+          <Button size="sm" variant="ghost" className="h-6 text-2xs px-2 pr-2 gap-0.5"
+            onClick={(e: React.MouseEvent) => {
+              onShowPopoverConfirm(e.clientX, e.clientY + POPOVER_OFFSET, () => {
+                setUIConfig({ prompts: DEFAULT_PROMPTS })
+                setSelectedPromptIndex(null)
+              })
+            }}
+          >
+            <RotateCcw className="size-3" />{t('reset')}
+          </Button>
+          <Button size="sm" variant="ghost" className="h-6 text-2xs px-2 pr-2 gap-0.5" onClick={handleExportPrompts}>
+            <Download className="size-3" />{t('export')}
           </Button>
         </div>
       </div>
@@ -184,7 +194,7 @@ export function PromptsTab({ onShowPopoverConfirm, promptImportInputRef }: Promp
         {/* 移动端返回按钮 */}
         {selectedPromptIndex !== null && prompts[selectedPromptIndex] && (
           <div className="md:hidden mb-3">
-            <Button size="icon" variant="ghost" className="size-6" onClick={() => setMobileDetail(false)}>
+            <Button size="icon" variant="ghost" className="size-6" onClick={() => setMobileDetail(false)} aria-label={t('back')}>
               <ChevronLeft data-icon className="size-3" />
             </Button>
           </div>
@@ -220,6 +230,7 @@ export function PromptsTab({ onShowPopoverConfirm, promptImportInputRef }: Promp
                           if (targetIndex < 0) setMobileDetail(false)
                         })
                       }}
+                      aria-label={t('deletePrompt')}
                     >
                       <Trash2 className="size-3" />
                     </Button>
@@ -233,14 +244,16 @@ export function PromptsTab({ onShowPopoverConfirm, promptImportInputRef }: Promp
             <div className="shrink-0">
               <div className="flex items-center mb-1">
                 <Label className="text-xs text-muted-foreground">{t('promptId')}</Label>
-                <Tooltip>
-                  <TooltipTrigger render={(props) => (
-                    <Button {...props} size="icon" variant="ghost" className="size-5">
+                <Popover>
+                  <PopoverTrigger render={(props) => (
+                    <Button {...props} size="icon" variant="ghost" className="size-5" aria-label={t('promptIdPlaceholder')}>
                       <Info className="size-3 text-muted-foreground/50" />
                     </Button>
                   )} />
-                  <TooltipContent side="top" className="text-2xs px-2 py-1 max-w-48">{t('promptIdPlaceholder')}</TooltipContent>
-                </Tooltip>
+                  <PopoverContent side="right" align="start" className="w-64 text-2xs leading-relaxed p-3">
+                    {t('promptIdPlaceholder')}
+                  </PopoverContent>
+                </Popover>
                 {prompts[selectedPromptIndex]?.id && (
                   <Tooltip>
                     <TooltipTrigger render={(props) => (
@@ -249,6 +262,7 @@ export function PromptsTab({ onShowPopoverConfirm, promptImportInputRef }: Promp
                           navigator.clipboard.writeText(window.location.origin + window.location.pathname + '#prompt=' + prompts[selectedPromptIndex].id)
                           toast.success(t('hashParamsCopied'))
                         }}
+                        aria-label={t('copyHashUrl')}
                       >
                         <Hash className="size-3 text-muted-foreground/50" />
                       </Button>

@@ -1,14 +1,14 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useStore } from '../store'
 import type { ModelMetadata } from '../types'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { Copy, Eye, Brain } from 'lucide-react'
+import { Checkbox } from '@/components/ui/checkbox'
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Copy, Eye, Lightbulb } from 'lucide-react'
 
 export interface ModelEditDialogProps {
   open: boolean
@@ -20,34 +20,39 @@ export interface ModelEditDialogProps {
 
 export function ModelEditDialog({ open, model, metadata, providerId, onClose }: ModelEditDialogProps) {
   const { providers, updateProvider } = useStore()
-  const [editName, setEditName] = useState(model)
-  const inputRef = useRef<HTMLInputElement>(null)
-  const panelRef = useRef<HTMLDivElement>(null)
   const { t } = useTranslation()
 
-  useEffect(() => {
-    if (open) { setEditName(model); setTimeout(() => inputRef.current?.focus(), 0) }
-  }, [open, model])
+  const [editName, setEditName] = useState(model)
+  const [supportsVision, setSupportsVision] = useState(false)
+  const [supportsThinking, setSupportsThinking] = useState(false)
+  const [contextLength, setContextLength] = useState('')
 
-  useEffect(() => {
-    if (!open) return
-    const handler = (e: MouseEvent) => {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) onClose()
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [open, onClose])
-
-  const currentMeta = useCallback((): ModelMetadata => {
+  const loadMeta = useCallback(() => {
     const provider = providers.find(p => p.id === providerId)
-    return provider?.modelMetadata?.[model] || metadata
+    const meta = provider?.modelMetadata?.[model] || metadata
+    setSupportsVision(meta.supportsVision)
+    setSupportsThinking(meta.supportsThinking)
+    setContextLength(meta.contextLength ? String(meta.contextLength) : '')
   }, [providers, providerId, model, metadata])
 
-  const save = useCallback((newName: string, newMetadata: ModelMetadata) => {
+  useEffect(() => {
+    if (open) {
+      setEditName(model)
+      loadMeta()
+    }
+  }, [open, model, loadMeta])
+
+  const handleSave = () => {
     const provider = providers.find(p => p.id === providerId)
     if (!provider) return
-    const trimmed = newName.trim()
+    const trimmed = editName.trim()
     if (!trimmed) return
+
+    const newMeta: ModelMetadata = {
+      supportsVision,
+      supportsThinking,
+      contextLength: contextLength && Number(contextLength) > 0 ? Number(contextLength) : undefined,
+    }
 
     const models = trimmed === model
       ? provider.models
@@ -55,74 +60,80 @@ export function ModelEditDialog({ open, model, metadata, providerId, onClose }: 
 
     const currentMetadata = { ...provider.modelMetadata }
     if (trimmed !== model) delete currentMetadata[model]
-    currentMetadata[trimmed] = newMetadata
+    currentMetadata[trimmed] = newMeta
 
     updateProvider(providerId, { models, modelMetadata: currentMetadata })
-  }, [providers, providerId, model, updateProvider])
-
-  const handleNameBlur = () => {
-    if (editName.trim() && editName.trim() !== model) {
-      save(editName, currentMeta())
-    }
+    onClose()
   }
 
-  if (!open) return null
-
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center">
-      <div ref={panelRef} className="relative bg-background rounded-lg shadow-lg border w-full mx-4 max-w-md">
-        <div className="px-4 py-3 flex flex-col gap-3">
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-xs">{t('modelName')}</Label>
-            <div className="flex items-center gap-2">
-              <Input
-                ref={inputRef}
-                value={editName}
-                onChange={e => setEditName(e.target.value)}
-                onBlur={handleNameBlur}
-                className="h-7 text-xs font-mono"
-                autoComplete="off"
-                onKeyDown={e => { if (e.key === 'Enter') { handleNameBlur(); onClose() } }}
+    <Dialog open={open}>
+      <DialogContent className="max-w-xs p-0 gap-0">
+        <DialogHeader className="px-3 py-1.5">
+          <DialogTitle className="text-sm">{t('edit')}</DialogTitle>
+        </DialogHeader>
+
+        <div className="px-3 pb-2 flex flex-col gap-2">
+          <InputGroup>
+            <InputGroupInput
+              value={editName}
+              onChange={e => setEditName(e.target.value)}
+              className="text-xs font-mono h-7"
+              onKeyDown={e => { if (e.key === 'Enter') handleSave() }}
+            />
+            <InputGroupAddon align="inline-end">
+              <InputGroupButton
+                size="icon-xs"
+                onClick={() => { navigator.clipboard.writeText(editName); toast.success(t('modelCopied')) }}
+                aria-label={t('copy')}
+              >
+                <Copy className="size-3" aria-hidden="true" />
+              </InputGroupButton>
+            </InputGroupAddon>
+          </InputGroup>
+
+          <div className="flex flex-col gap-1">
+            <Label className="flex items-center gap-2 cursor-pointer">
+              <Checkbox
+                checked={supportsVision}
+                onCheckedChange={(checked) => setSupportsVision(!!checked)}
               />
-              <Tooltip>
-                <TooltipTrigger render={(props) => (
-                  <Button {...props} size="icon" variant="ghost" className="size-7 shrink-0"
-                    onMouseDown={(e: React.MouseEvent) => e.preventDefault()}
-                    onClick={() => { navigator.clipboard.writeText(editName); toast.success(t('modelCopied')) }}
-                  >
-                    <Copy className="size-3" />
-                  </Button>
-                )} />
-                <TooltipContent side="top" className="text-2xs px-2 py-1">{t('copyModelName')}</TooltipContent>
-              </Tooltip>
-            </div>
+              <Eye className="size-3 text-muted-foreground" />
+              <span className="text-xs">{t('visionSupport')}</span>
+            </Label>
+            <Label className="flex items-center gap-2 cursor-pointer">
+              <Checkbox
+                checked={supportsThinking}
+                onCheckedChange={(checked) => setSupportsThinking(!!checked)}
+              />
+              <Lightbulb className="size-3 text-muted-foreground" />
+              <span className="text-xs">{t('thinkingSupport')}</span>
+            </Label>
           </div>
 
-          <div className="flex flex-col gap-2">
-            <Label className="text-xs">{t('featureSupport')}</Label>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Eye className="size-3 text-muted-foreground" />
-                <span className="text-xs">{t('visionSupport')}</span>
-              </div>
-              <Switch
-                checked={currentMeta().supportsVision}
-                onCheckedChange={(checked) => save(model, { ...currentMeta(), supportsVision: checked })}
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs text-muted-foreground">{t('context')}</Label>
+            <InputGroup>
+              <InputGroupInput
+                type="number"
+                value={contextLength}
+                onChange={e => setContextLength(e.target.value)}
+                placeholder="128000"
+                className="text-xs font-mono h-7"
               />
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Brain className="size-3 text-muted-foreground" />
-                <span className="text-xs">{t('thinkingSupport')}</span>
-              </div>
-              <Switch
-                checked={currentMeta().supportsThinking}
-                onCheckedChange={(checked) => save(model, { ...currentMeta(), supportsThinking: checked })}
-              />
-            </div>
+            </InputGroup>
           </div>
         </div>
-      </div>
-    </div>
+
+        <DialogFooter className="px-3 py-2 border-t">
+          <Button variant="outline" size="sm" className="h-6 text-xs" onClick={onClose}>
+            {t('cancel')}
+          </Button>
+          <Button size="sm" className="h-6 text-xs" onClick={handleSave}>
+            {t('confirm')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

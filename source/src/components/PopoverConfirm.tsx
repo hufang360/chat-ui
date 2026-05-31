@@ -14,9 +14,10 @@ export function PopoverConfirm({ open, x, y, onClose, onConfirm }: PopoverConfir
   if (!open) return null
   return (
     <>
-      <div
+      <button
         className="fixed inset-0 z-[60]"
         onClick={onClose}
+        aria-label={t('cancel')}
       />
       <div
         className="fixed z-[70] bg-popover border rounded-md shadow-lg p-2"

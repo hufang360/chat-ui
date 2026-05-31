@@ -21,18 +21,29 @@ export function useChat() {
   const abortControllerRef = useRef<AbortController | null>(null)
   // 记录当前流式响应对应的对话，防止切对话后旧回调写入新对话
   const streamingConversationIdRef = useRef<string | null>(null)
+  // rAF 节流：批量更新 streaming 状态，避免每个 SSE chunk 都触发重渲染
+  const rafIdRef = useRef<number | null>(null)
 
-  const {
-    currentConversationId,
-    selectedModel,
-    globalSystemPrompt,
-    modelParams: storeModelParams,
-    getCurrentConversation,
-    getProvider,
-    getApiKey,
-    addMessage,
-    deleteMessage,
-  } = useStore()
+  const currentConversationId = useStore(s => s.currentConversationId)
+  const selectedModel = useStore(s => s.selectedModel)
+  const globalSystemPrompt = useStore(s => s.globalSystemPrompt)
+  const storeModelParams = useStore(s => s.modelParams)
+  const uiConfig = useStore(s => s.uiConfig)
+  const getCurrentConversation = useStore(s => s.getCurrentConversation)
+  const getProvider = useStore(s => s.getProvider)
+  const getApiKey = useStore(s => s.getApiKey)
+  const addMessage = useStore(s => s.addMessage)
+  const deleteMessage = useStore(s => s.deleteMessage)
+
+  // 构建系统提示词，按需注入元数据
+  const buildSystemPrompt = (basePrompt: string) => {
+    if (uiConfig.injectMetadata === false) return basePrompt
+    const now = new Date()
+    const date = now.toISOString().split('T')[0]
+    const time = now.toTimeString().split(' ')[0]
+    const metadata = `Current model: ${selectedModel}\nCurrent date: ${date}\nCurrent time: ${time}`
+    return metadata + '\n\n' + basePrompt
+  }
 
   // 构建符合 OpenAI Vision API 格式的消息列表，system 消息单独通过 systemPrompt 传入
   const buildApiMessages = (messages: Array<{ role: string; content: string; images?: string[]; files?: Array<{ type: string; data: string; name: string }> }>) => {
@@ -54,6 +65,27 @@ export function useChat() {
       }
     }
     return apiMessages
+  }
+
+  // 将 ref 中的最新内容同步到 state（在 rAF 回调中执行）
+  const flushStreamingState = () => {
+    rafIdRef.current = null
+    setStreamingContent(streamingRef.current)
+    setStreamingThinking(streamingThinkingRef.current)
+  }
+
+  const resetStreamingState = () => {
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current)
+      rafIdRef.current = null
+    }
+    setStreamingContent('')
+    setStreamingThinking('')
+    streamingRef.current = ''
+    streamingThinkingRef.current = ''
+    setIsLoading(false)
+    abortControllerRef.current = null
+    streamingConversationIdRef.current = null
   }
 
   const sendMessage = useCallback(async (content: string, imageDataUrls: string[], thinkingEnabled?: boolean, thinkingLevel?: 'low' | 'medium' | 'high') => {
@@ -86,7 +118,7 @@ export function useChat() {
     streamingConversationIdRef.current = currentConversationId
 
     const conversation = getCurrentConversation()
-    const systemPrompt = conversation?.systemPrompt ?? globalSystemPrompt
+    const systemPrompt = buildSystemPrompt(conversation?.systemPrompt ?? globalSystemPrompt)
     const apiMessages = buildApiMessages(conversation?.messages || [])
 
     const finalModelParams = {
@@ -104,29 +136,26 @@ export function useChat() {
       messages: apiMessages,
       systemPrompt,
       modelParams: finalModelParams,
+      modelMetadata,
       useCorsProxy: provider.useCorsProxy,
       corsProxyUrl: undefined,
       abortSignal: abortControllerRef.current.signal,
       modelSupportsThinking,
       onChunk: content => {
-        const newContent = streamingRef.current + content
-        streamingRef.current = newContent
-        setStreamingContent(newContent)
+        streamingRef.current += content
+        if (rafIdRef.current === null) {
+          rafIdRef.current = requestAnimationFrame(flushStreamingState)
+        }
       },
       onThinkingChunk: thinkingContent => {
-        const newThinking = streamingThinkingRef.current + thinkingContent
-        streamingThinkingRef.current = newThinking
-        setStreamingThinking(newThinking)
+        streamingThinkingRef.current += thinkingContent
+        if (rafIdRef.current === null) {
+          rafIdRef.current = requestAnimationFrame(flushStreamingState)
+        }
       },
       onError: error => {
         if (error.name === 'AbortError') {
-          setStreamingContent('')
-          setStreamingThinking('')
-          streamingRef.current = ''
-          streamingThinkingRef.current = ''
-          setIsLoading(false)
-          abortControllerRef.current = null
-          streamingConversationIdRef.current = null
+          resetStreamingState()
           return
         }
         if (streamingConversationIdRef.current === currentConversationId) {
@@ -137,15 +166,16 @@ export function useChat() {
             isError: true,
           })
         }
-        setStreamingContent('')
-        setStreamingThinking('')
-        streamingRef.current = ''
-        streamingThinkingRef.current = ''
-        setIsLoading(false)
-        abortControllerRef.current = null
-        streamingConversationIdRef.current = null
+        resetStreamingState()
       },
       onComplete: () => {
+        // 确保最终内容被刷新到 state
+        if (rafIdRef.current !== null) {
+          cancelAnimationFrame(rafIdRef.current)
+          rafIdRef.current = null
+        }
+        setStreamingContent(streamingRef.current)
+        setStreamingThinking(streamingThinkingRef.current)
         if (streamingConversationIdRef.current === currentConversationId && streamingRef.current) {
           addMessage({
             role: 'assistant',
@@ -154,13 +184,7 @@ export function useChat() {
             model: selectedModel
           })
         }
-        setStreamingContent('')
-        setStreamingThinking('')
-        streamingRef.current = ''
-        streamingThinkingRef.current = ''
-        setIsLoading(false)
-        abortControllerRef.current = null
-        streamingConversationIdRef.current = null
+        resetStreamingState()
       },
     })
 
@@ -182,12 +206,7 @@ export function useChat() {
     } else if (streamingConversationIdRef.current === currentConversationId) {
       addMessage({ role: 'assistant', content: i18n.t('cancelled'), model: selectedModel })
     }
-    setStreamingContent('')
-    setStreamingThinking('')
-    streamingRef.current = ''
-    streamingThinkingRef.current = ''
-    setIsLoading(false)
-    streamingConversationIdRef.current = null
+    resetStreamingState()
   }, [currentConversationId, selectedModel])
 
   const regenerate = useCallback(async (messageIndex: number, thinkingEnabled?: boolean, thinkingLevel?: 'low' | 'medium' | 'high') => {
@@ -225,7 +244,7 @@ export function useChat() {
     streamingThinkingRef.current = ''
     streamingConversationIdRef.current = currentConversationId
 
-    const systemPrompt = conversation?.systemPrompt ?? globalSystemPrompt
+    const systemPrompt = buildSystemPrompt(conversation?.systemPrompt ?? globalSystemPrompt)
     const apiMessages = buildApiMessages(contextMessages)
 
     const finalModelParams = {
@@ -243,29 +262,26 @@ export function useChat() {
       messages: apiMessages,
       systemPrompt,
       modelParams: finalModelParams,
+      modelMetadata,
       useCorsProxy: provider.useCorsProxy,
       corsProxyUrl: undefined,
       abortSignal: abortControllerRef.current.signal,
       modelSupportsThinking,
       onChunk: content => {
-        const newContent = streamingRef.current + content
-        streamingRef.current = newContent
-        setStreamingContent(newContent)
+        streamingRef.current += content
+        if (rafIdRef.current === null) {
+          rafIdRef.current = requestAnimationFrame(flushStreamingState)
+        }
       },
       onThinkingChunk: thinkingContent => {
-        const newThinking = streamingThinkingRef.current + thinkingContent
-        streamingThinkingRef.current = newThinking
-        setStreamingThinking(newThinking)
+        streamingThinkingRef.current += thinkingContent
+        if (rafIdRef.current === null) {
+          rafIdRef.current = requestAnimationFrame(flushStreamingState)
+        }
       },
       onError: error => {
         if (error.name === 'AbortError') {
-          setStreamingContent('')
-          setStreamingThinking('')
-          streamingRef.current = ''
-          streamingThinkingRef.current = ''
-          setIsLoading(false)
-          abortControllerRef.current = null
-          streamingConversationIdRef.current = null
+          resetStreamingState()
           return
         }
         if (streamingConversationIdRef.current === currentConversationId) {
@@ -276,15 +292,16 @@ export function useChat() {
             isError: true,
           })
         }
-        setStreamingContent('')
-        setStreamingThinking('')
-        streamingRef.current = ''
-        streamingThinkingRef.current = ''
-        setIsLoading(false)
-        abortControllerRef.current = null
-        streamingConversationIdRef.current = null
+        resetStreamingState()
       },
       onComplete: () => {
+        // 确保最终内容被刷新到 state
+        if (rafIdRef.current !== null) {
+          cancelAnimationFrame(rafIdRef.current)
+          rafIdRef.current = null
+        }
+        setStreamingContent(streamingRef.current)
+        setStreamingThinking(streamingThinkingRef.current)
         if (streamingConversationIdRef.current === currentConversationId && streamingRef.current) {
           addMessage({
             role: 'assistant',
@@ -293,13 +310,7 @@ export function useChat() {
             model: selectedModel
           })
         }
-        setStreamingContent('')
-        setStreamingThinking('')
-        streamingRef.current = ''
-        streamingThinkingRef.current = ''
-        setIsLoading(false)
-        abortControllerRef.current = null
-        streamingConversationIdRef.current = null
+        resetStreamingState()
       },
     })
 

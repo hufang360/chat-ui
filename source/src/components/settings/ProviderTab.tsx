@@ -12,8 +12,8 @@ import { Switch } from '@/components/ui/switch'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { POPOVER_OFFSET, formatTimeAgo } from '../../utils/settingsUtils'
 import {
-  Plus, Trash2, Upload, Download, Eye, EyeOff, Brain, Lightbulb,
-  Edit2, Check, CloudDownload, GripVertical, X, Search, ChevronLeft, ChevronRight, History,
+  Plus, Trash2, Upload, Download, Eye, EyeOff, Lightbulb, X,
+  Edit2, Check, CloudDownload, Search, ChevronLeft, ChevronRight, History,
   ExternalLink, RotateCcw, Hash,
 } from 'lucide-react'
 
@@ -47,8 +47,10 @@ export function ProviderTab({ onShowPopoverConfirm, configImportInputRef, onEdit
   const [showApiKey, setShowApiKey] = useState(false)
   const [draggedProviderId, setDraggedProviderId] = useState<string | null>(null)
   const [dragOverProviderId, setDragOverProviderId] = useState<string | null>(null)
+  const [dragOverProviderPos, setDragOverProviderPos] = useState<'top' | 'bottom'>('bottom')
   const [draggedModelIndex, setDraggedModelIndex] = useState<number | null>(null)
   const [dragOverModelIndex, setDragOverModelIndex] = useState<number | null>(null)
+  const [dragOverModelPos, setDragOverModelPos] = useState<'top' | 'bottom'>('bottom')
   const [newProviderId, setNewProviderId] = useState<string | null>(null)
   const [mobileDetail, setMobileDetail] = useState(false)
   const [historyPopoverOpen, setHistoryPopoverOpen] = useState(false)
@@ -90,10 +92,10 @@ export function ProviderTab({ onShowPopoverConfirm, configImportInputRef, onEdit
     setEditingProviderName(false)
   }, [selectedProviderId])
 
-  // 新建供应商时自动进入名称编辑状态
+  // 新建供应商时自动聚焦 API 密钥
   useEffect(() => {
     if (newProviderId && selectedProviderId === newProviderId) {
-      setEditingProviderName(true)
+      setTimeout(() => apiKeyInputRef.current?.focus(), 50)
       setNewProviderId(null)
     }
   }, [newProviderId, selectedProviderId])
@@ -121,13 +123,6 @@ export function ProviderTab({ onShowPopoverConfirm, configImportInputRef, onEdit
     localStorage.setItem('chat-auto-query-balance', JSON.stringify(autoQueryBalance))
   }, [autoQueryBalance])
 
-  // 新增供应商后聚焦 API Key
-  useEffect(() => {
-    if (newProviderId && selectedProviderId === newProviderId) {
-      setTimeout(() => apiKeyInputRef.current?.focus(), 100)
-      setNewProviderId(null)
-    }
-  }, [selectedProviderId, newProviderId])
 
   // 切换供应商时自动刷新余额
   useEffect(() => {
@@ -285,23 +280,51 @@ export function ProviderTab({ onShowPopoverConfirm, configImportInputRef, onEdit
   return (
     <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
       {/* 供应商列表 */}
-      <div className={`${mobileDetail ? 'hidden md:flex' : 'flex'} w-full md:w-44 border-b md:border-b-0 md:border-r p-3 flex-col overflow-hidden min-h-0 md:shrink-0`}>
-        <div className="flex items-center justify-between mb-2">
-          <Label className="text-xs font-medium text-muted-foreground">{t('provider')}</Label>
-          <Tooltip>
-            <TooltipTrigger render={(props) => (
-              <Button {...props} size="icon" variant="ghost" className="size-5" onClick={handleAddProvider}>
-                <Plus className="size-3" />
-              </Button>
-            )} />
-            <TooltipContent side="top" className="text-2xs px-2 py-1">{t('addProvider')}</TooltipContent>
-          </Tooltip>
+      <div className={`${mobileDetail ? 'hidden md:flex' : 'flex'} w-full md:w-44 border-b md:border-b-0 md:border-r flex-col overflow-hidden min-h-0 md:shrink-0`}>
+        <div className="flex items-center justify-between">
+          <Label className="text-2xs text-muted-foreground px-4 pt-1">{t('provider')}</Label>
+          <div className="flex items-center gap-0.5 pt-1 pr-1">
+            <Tooltip>
+              <TooltipTrigger render={(props) => (
+                <Button {...props} size="icon" variant="ghost" className="size-5" onClick={handleAddProvider}>
+                  <Plus className="size-3" />
+                </Button>
+              )} />
+              <TooltipContent side="top" className="text-2xs px-2 py-1">{t('addProvider')}</TooltipContent>
+            </Tooltip>
+          </div>
         </div>
         {/* 供应商列表 */}
-        <div className="flex-1 min-h-0 overflow-y-auto pr-1 flex flex-col gap-1">
-          {providers.map((p) => (
-            <div key={p.id} className="group relative"
-              onDragOver={(e) => { e.preventDefault(); setDragOverProviderId(p.id) }}
+        <div className="flex-1 min-h-0 overflow-y-auto px-1 pr-1 flex flex-col gap-1">
+          {providers.map((p) => {
+            const isDragOver = dragOverProviderId === p.id
+            const dropLine = isDragOver
+              ? dragOverProviderPos === 'top'
+                ? 'before:absolute before:inset-x-1 before:-top-0.5 before:h-0 before:border-t-2 before:border-dashed before:border-primary before:z-10'
+                : 'before:absolute before:inset-x-1 before:-bottom-0.5 before:h-0 before:border-t-2 before:border-dashed before:border-primary before:z-10'
+              : ''
+            return (
+            <div key={p.id} className={`group relative ${dropLine}`}
+              draggable
+              onDragStart={(e) => {
+                setDraggedProviderId(p.id)
+                const ghost = e.currentTarget.cloneNode(true) as HTMLElement
+                ghost.style.position = 'absolute'
+                ghost.style.top = '-9999px'
+                ghost.style.width = e.currentTarget.offsetWidth + 'px'
+                ghost.style.opacity = '0.85'
+                ghost.style.pointerEvents = 'none'
+                document.body.appendChild(ghost)
+                e.dataTransfer.setDragImage(ghost, 0, 0)
+                dragGhostRef.current = ghost
+              }}
+              onDragOver={(e) => {
+                e.preventDefault()
+                const rect = e.currentTarget.getBoundingClientRect()
+                setDragOverProviderId(p.id)
+                setDragOverProviderPos(e.clientY < rect.top + rect.height / 2 ? 'top' : 'bottom')
+              }}
+              onDragLeave={() => { if (dragOverProviderId === p.id) setDragOverProviderId(null) }}
               onDragEnd={() => {
                 if (draggedProviderId && dragOverProviderId && draggedProviderId !== dragOverProviderId) {
                   reorderProvider(draggedProviderId, dragOverProviderId)
@@ -310,26 +333,6 @@ export function ProviderTab({ onShowPopoverConfirm, configImportInputRef, onEdit
                 if (dragGhostRef.current) { document.body.removeChild(dragGhostRef.current); dragGhostRef.current = null }
               }}
             >
-              <span className="absolute left-0.5 top-1/2 -translate-y-1/2 cursor-grab opacity-0 group-hover:opacity-100 z-10 hidden md:block"
-                draggable
-                onDragStart={(e) => {
-                  e.stopPropagation(); setDraggedProviderId(p.id)
-                  const row = (e.currentTarget as HTMLElement).closest('.group') as HTMLElement
-                  if (row) {
-                    const ghost = row.cloneNode(true) as HTMLElement
-                    ghost.style.position = 'absolute'
-                    ghost.style.top = '-9999px'
-                    ghost.style.width = row.offsetWidth + 'px'
-                    ghost.style.opacity = '0.85'
-                    ghost.style.pointerEvents = 'none'
-                    document.body.appendChild(ghost)
-                    e.dataTransfer.setDragImage(ghost, 0, 0)
-                    dragGhostRef.current = ghost
-                  }
-                }}
-              >
-                <GripVertical className="size-3 text-muted-foreground" />
-              </span>
               <Button variant={selectedProviderId === p.id ? 'outline' : 'ghost'} size="sm"
                 className="justify-start text-xs h-7 truncate w-full"
                 onClick={() => handleSelectProvider(p.id)}
@@ -338,25 +341,26 @@ export function ProviderTab({ onShowPopoverConfirm, configImportInputRef, onEdit
                 <ChevronRight className="size-3 ml-auto opacity-50 md:hidden" />
               </Button>
             </div>
-          ))}
+            )
+          })}
         </div>
-        {/* 导入/导出配置 */}
-        <div className="shrink-0 pt-2 border-t flex flex-col gap-1">
-          <div className="flex gap-1">
-            <Button size="sm" variant="outline" className="flex-1 h-6 text-2xs" onClick={() => configImportInputRef.current?.click()}>
-              <Upload data-icon="inline-start" className="size-2.5 mr-0.5" />{t('import')}
-            </Button>
-            <Button size="sm" variant="outline" className="flex-1 h-6 text-2xs" onClick={handleExportConfig}>
-              <Download data-icon="inline-start" className="size-2.5 mr-0.5" />{t('export')}
-            </Button>
-          </div>
-          <Button size="sm" variant="outline" className="w-full h-6 text-2xs" onClick={(e: React.MouseEvent) => {
-            onShowPopoverConfirm(e.clientX, e.clientY + POPOVER_OFFSET, () => {
-              useStore.setState({ providers: DEFAULT_PROVIDERS_WITH_FLAGS })
-              setSelectedProviderId('openai')
-            })
-          }}>
-            <RotateCcw data-icon="inline-start" className="size-2.5 mr-0.5" />{t('reset')}
+        {/* 底部操作栏 */}
+        <div className="flex items-center justify-center gap-0.5 pt-1.5 pb-1 border-t shrink-0">
+          <Button size="sm" variant="ghost" className="h-6 text-2xs px-2 pr-2 gap-0.5" onClick={() => configImportInputRef.current?.click()}>
+            <Upload className="size-3" />{t('import')}
+          </Button>
+          <Button size="sm" variant="ghost" className="h-6 text-2xs px-2 pr-2 gap-0.5"
+            onClick={(e: React.MouseEvent) => {
+              onShowPopoverConfirm(e.clientX, e.clientY + POPOVER_OFFSET, () => {
+                useStore.setState({ providers: DEFAULT_PROVIDERS_WITH_FLAGS })
+                setSelectedProviderId('openai')
+              })
+            }}
+          >
+            <RotateCcw className="size-3" />{t('reset')}
+          </Button>
+          <Button size="sm" variant="ghost" className="h-6 text-2xs px-2 pr-2 gap-0.5" onClick={handleExportConfig}>
+            <Download className="size-3" />{t('export')}
           </Button>
         </div>
       </div>
@@ -366,7 +370,7 @@ export function ProviderTab({ onShowPopoverConfirm, configImportInputRef, onEdit
         {/* 移动端返回按钮 */}
         {selectedProvider && (
           <div className="md:hidden h-8 border-b flex items-center px-2 shrink-0">
-            <Button size="icon" variant="ghost" className="size-6" onClick={() => setMobileDetail(false)}>
+            <Button size="icon" variant="ghost" className="size-6" onClick={() => setMobileDetail(false)} aria-label={t('back')}>
               <ChevronLeft data-icon className="size-3" />
             </Button>
             <span className="text-xs font-medium ml-1">{selectedProvider.name}</span>
@@ -391,9 +395,9 @@ export function ProviderTab({ onShowPopoverConfirm, configImportInputRef, onEdit
                   <div className="flex items-center gap-1.5">
                     <h3 className="text-xs font-medium cursor-pointer" onClick={() => setEditingProviderName(true)}>{selectedProvider.name}</h3>
                     {selectedProvider.consoleUrl && (
-                      <ExternalLink className="size-3 text-muted-foreground hover:text-foreground cursor-pointer"
-                        onClick={() => window.open(selectedProvider.consoleUrl, '_blank')}
-                      />
+                      <button onClick={() => window.open(selectedProvider.consoleUrl, '_blank')} aria-label={t('externalLink')}>
+                        <ExternalLink className="size-3 text-muted-foreground hover:text-foreground cursor-pointer" />
+                      </button>
                     )}
                   </div>
                 )}
@@ -407,6 +411,7 @@ export function ProviderTab({ onShowPopoverConfirm, configImportInputRef, onEdit
                           navigator.clipboard.writeText(window.location.origin + window.location.pathname + '#providers=' + config)
                           toast.success(t('hashParamsCopied'))
                         }}
+                        aria-label={t('copyHashUrl')}
                       >
                         <Hash className="size-3" />
                       </Button>
@@ -432,6 +437,7 @@ export function ProviderTab({ onShowPopoverConfirm, configImportInputRef, onEdit
                             setSelectedProviderId(targetProvider?.id || '')
                           })
                         }}
+                        aria-label={t('deleteProvider')}
                       >
                         <Trash2 className="size-3" />
                       </Button>
@@ -463,6 +469,7 @@ export function ProviderTab({ onShowPopoverConfirm, configImportInputRef, onEdit
                     />
                     <button type="button" onClick={() => setShowApiKey(!showApiKey)}
                       className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5"
+                      aria-label={showApiKey ? t('hideApiKey') : t('showApiKey')}
                     >{showApiKey ? <EyeOff className="size-3" /> : <Eye className="size-3" />}</button>
                   </div>
                   {selectedProvider.apiKeyHint && (
@@ -472,7 +479,7 @@ export function ProviderTab({ onShowPopoverConfirm, configImportInputRef, onEdit
 
                 {/* API 地址 */}
                 <div className="flex items-center gap-2">
-                  <div className="flex flex-col gap-1 flex-1">
+                  <div className="flex flex-col gap-1 flex-1 pl-0.5">
                     <div className="flex items-center">
                       <Label className="text-xs text-muted-foreground">{t('apiURL')}</Label>
                       <label className="ml-auto flex items-center gap-1 text-2xs cursor-pointer shrink-0">
@@ -490,6 +497,9 @@ export function ProviderTab({ onShowPopoverConfirm, configImportInputRef, onEdit
                       onChange={e => updateProvider(selectedProvider.id, { baseUrl: e.target.value })}
                       placeholder="https://api.xx.com/v1" className="h-7 text-2xs"
                     />
+                    {selectedProvider.baseUrl && (
+                      <p className="text-2xs text-muted-foreground truncate">{selectedProvider.baseUrl.replace(/\/+$/, '')}/chat/completions</p>
+                    )}
                     {selectedProvider.apiUrlHint && (
                       <p className="text-2xs text-muted-foreground">{t(selectedProvider.apiUrlHint)}</p>
                     )}
@@ -509,6 +519,7 @@ export function ProviderTab({ onShowPopoverConfirm, configImportInputRef, onEdit
                           <TooltipTrigger render={
                             <Button size="icon" variant="ghost" className="size-5"
                               onClick={() => setHistoryPopoverOpen(!historyPopoverOpen)}
+                              aria-label={t('queryHistory')}
                             >
                               <History className="size-3" />
                             </Button>
@@ -573,148 +584,18 @@ export function ProviderTab({ onShowPopoverConfirm, configImportInputRef, onEdit
                 </div>
               )}
 
-              {/* 添加模型 */}
-              <div className="gap-1 space-y-0">
-                <Label className="text-xs text-muted-foreground">{t('addModel')}</Label>
-                <div className="flex items-center">
-                  <div className="relative flex-1">
-                    <div
-                      className={`h-7 px-2 border rounded-l-md flex items-center justify-between text-2xs cursor-pointer ${
-                        fetchedModels.length === 0 ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'bg-background hover:bg-accent'
-                      }`}
-                      onClick={() => {
-                        if (fetchedModels.length > 0 && !selectedFetchedModel) setModelSearch(' ')
-                        else if (selectedFetchedModel) setModelSearch(selectedFetchedModel)
-                      }}
-                    >
-                      <span className="truncate">{selectedFetchedModel || (fetchedModels.length > 0 ? t('clickToSelectModel') : t('pleaseFetchModelsFirst'))}</span>
-                      {fetchedModels.length > 0 && <span className="ml-1 opacity-50">▼</span>}
-                    </div>
-                    {/* 模型选择下拉列表 */}
-                    {(modelSearch || (fetchedModels.length > 0 && selectedFetchedModel)) && fetchedModels.length > 0 && (
-                      <>
-                        <div className="fixed inset-0 z-40" onClick={() => { setModelSearch(''); setSelectedFetchedModel('') }} />
-                        <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-popover border rounded-md shadow-lg">
-                          <div className="p-1 border-b">
-                            <Input value={modelSearch === ' ' ? '' : modelSearch}
-                              onChange={e => setModelSearch(e.target.value)} placeholder={t('searchModel')} className="h-6 text-2xs" autoFocus
-                            />
-                          </div>
-                          <div className="max-h-[200px] overflow-y-auto">
-                            {fetchedModels
-                              .filter(m => !modelSearch || modelSearch === ' ' || m.toLowerCase().includes(modelSearch.toLowerCase()))
-                              .map(model => {
-                                const matchedKey = Object.keys(MODEL_CAPABILITIES).find(
-                                  key => key === model || model.includes(key) || key.includes(model.split('/')[model.split('/').length - 1])
-                                )
-                                const capabilities = matchedKey ? MODEL_CAPABILITIES[matchedKey] : null
-                                return (
-                                  <div key={model}
-                                    className={`px-2 py-1.5 text-xs hover:bg-accent cursor-pointer flex items-center justify-between ${selectedProvider.models.includes(model) ? 'text-muted-foreground' : ''}`}
-                                    onClick={() => {
-                                      if (!selectedProvider.models.includes(model)) {
-                                        updateProvider(selectedProvider.id, { models: [...selectedProvider.models, model] })
-                                        if (capabilities) {
-                                          const currentMetadata = selectedProvider.modelMetadata || {}
-                                          updateProvider(selectedProvider.id, {
-                                            modelMetadata: { ...currentMetadata, [model]: { supportsVision: capabilities.supportsVision, supportsThinking: capabilities.supportsThinking } }
-                                          })
-                                        }
-                                      }
-                                      setModelSearch(''); setSelectedFetchedModel('')
-                                    }}
-                                  >
-                                    <span className="truncate flex items-center gap-1">
-                                      {model}
-                                      {capabilities && (
-                                        <>
-                                          {capabilities.supportsVision && <Eye className="size-2.5 text-muted-foreground shrink-0" />}
-                                          {capabilities.supportsThinking && <Lightbulb className="size-2.5 text-muted-foreground shrink-0" />}
-                                        </>
-                                      )}
-                                    </span>
-                                    {selectedProvider.models.includes(model) && <Check className="size-3 shrink-0" />}
-                                  </div>
-                                )
-                              })}
-                            {modelSearch && modelSearch !== ' ' && !fetchedModels.some(m => m.toLowerCase() === modelSearch.toLowerCase()) && (
-                              <div className="px-2 py-1.5 text-xs hover:bg-accent cursor-pointer flex items-center justify-between text-primary border-t"
-                                onClick={() => {
-                                  if (modelSearch.trim() && !selectedProvider.models.includes(modelSearch.trim())) {
-                                    updateProvider(selectedProvider.id, { models: [...selectedProvider.models, modelSearch.trim()] })
-                                  }
-                                  setModelSearch(''); setSelectedFetchedModel('')
-                                }}
-                              >
-                                <span className="truncate flex items-center gap-1"><Plus className="size-2.5" />{modelSearch}</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                  {/* 拉取远程模型列表按钮 */}
-                  <Button variant="outline" className="h-7 text-2xs px-2 shrink-0 rounded-l-none border-l-0 whitespace-nowrap"
-                    onClick={async () => {
-                      if (fetchedModels.length > 0 && !modelSearch && !selectedFetchedModel) {
-                        setModelSearch(' ')
-                      } else {
-                        const apiKey = apiKeys[selectedProvider.id]
-                        if (!apiKey && !selectedProvider.allowEmptyApiKey) { alert(t('pleaseSetApiKey')); return }
-                        try {
-                          let apiUrl = selectedProvider.baseUrl
-                          if (selectedProvider.useCorsProxy && uiConfig.corsProxyUrl) {
-                            apiUrl = `${uiConfig.corsProxyUrl}/${selectedProvider.baseUrl}`
-                          }
-                          const headers: Record<string, string> = {}
-                          if (apiKey) {
-                            headers['Authorization'] = `Bearer ${apiKey}`
-                          }
-                          const response = await fetch(`${apiUrl}/models`, { headers })
-                          if (response.ok) {
-                            const data = await response.json()
-                            let models: string[] = []
-                            const modelMetadata: Record<string, ModelMetadata> = {}
-
-                            if (data.data && Array.isArray(data.data)) {
-                              models = data.data.map((m: { id: string }) => m.id)
-                              models.forEach((modelId: string) => {
-                                const matchedKey = Object.keys(MODEL_CAPABILITIES).find(
-                                  key => key === modelId || modelId.includes(key) || key.includes(modelId.split('/')[modelId.split('/').length - 1])
-                                )
-                                if (matchedKey) {
-                                  modelMetadata[modelId] = { supportsVision: MODEL_CAPABILITIES[matchedKey].supportsVision, supportsThinking: MODEL_CAPABILITIES[matchedKey].supportsThinking }
-                                }
-                              })
-                            }
-
-                            setFetchedModels(models)
-                            if (Object.keys(modelMetadata).length > 0) {
-                              updateProvider(selectedProvider.id, { modelMetadata: { ...(selectedProvider.modelMetadata || {}), ...modelMetadata } })
-                            }
-                            if (models.length === 0) { alert(t('noModelsFound')) } else { setModelSearch(' ') }
-                          } else {
-                              const errText = await response.text().catch(() => '')
-                              alert(`${t('fetchModelsFailed')}${errText ? '\n' + errText : ''}`)
-                            }
-                        } catch (e) { alert(`${t('fetchModelListFailed')}\n${e instanceof Error ? e.message : e}`) }
-                      }
-                    }}
-                  ><CloudDownload className="size-3" />{t('fetch')}</Button>
-                </div>
-              </div>
             </div>
 
             {/* 模型列表 */}
-            <div className="flex-1 p-3 overflow-y-auto">
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="text-xs font-medium">{t('modelList')}</h4>
+            <div className="flex-1 p-2 overflow-y-auto">
+              <div className="flex items-center gap-1 mb-2">
+                <h4 className="text-xs font-medium px-1">{t('modelList')}</h4>
                 {selectedProvider.models.length > 0 && (
                   <Tooltip>
                     <TooltipTrigger render={(props) => (
                       <Button {...props} size="icon" variant="ghost" className="size-5"
                         onClick={(e: React.MouseEvent) => onShowPopoverConfirm(e.clientX, e.clientY + POPOVER_OFFSET, () => updateProvider(selectedProvider.id, { models: [] }))}
+                        aria-label={t('clearModelList')}
                       >
                         <Trash2 className="size-3" />
                       </Button>
@@ -722,19 +603,148 @@ export function ProviderTab({ onShowPopoverConfirm, configImportInputRef, onEdit
                     <TooltipContent side="top" className="text-2xs px-2 py-1">{t('clearModelList')}</TooltipContent>
                   </Tooltip>
                 )}
+                <div className="flex-1" />
+                <div className="flex items-center">
+                <div className="relative w-64">
+                  <div
+                    className="h-6 px-1.5 border rounded-l-md flex items-center justify-between text-2xs cursor-pointer bg-background hover:bg-accent"
+                    onClick={() => {
+                      if (!modelSearch) setModelSearch(' ')
+                      else if (selectedFetchedModel) setModelSearch(selectedFetchedModel)
+                    }}
+                  >
+                    <span className="truncate max-w-[600px]">{selectedFetchedModel || t('clickToSelectModel')}</span>
+                    {fetchedModels.length > 0 && <span className="ml-0.5 opacity-50 text-3xs">▼</span>}
+                  </div>
+                  {(modelSearch || (fetchedModels.length > 0 && selectedFetchedModel)) && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => { setModelSearch(''); setSelectedFetchedModel('') }} />
+                      <div className="absolute top-full right-0 mt-1 z-50 bg-popover border rounded-md shadow-lg w-64">
+                        <div className="p-1 border-b">
+                          <Input value={modelSearch === ' ' ? '' : modelSearch}
+                            onChange={e => setModelSearch(e.target.value)} placeholder={t('searchModel')} className="h-6 text-2xs" aria-label={t('searchModel')} autoFocus
+                          />
+                        </div>
+                        <div className="max-h-[200px] overflow-y-auto">
+                          {fetchedModels
+                            .filter(m => !modelSearch || modelSearch === ' ' || m.toLowerCase().includes(modelSearch.toLowerCase()))
+                            .map(model => {
+                              const matchedKey = Object.keys(MODEL_CAPABILITIES).find(
+                                key => key === model || model.includes(key) || key.includes(model.split('/')[model.split('/').length - 1])
+                              )
+                              const capabilities = matchedKey ? MODEL_CAPABILITIES[matchedKey] : null
+                              return (
+                                <div key={model}
+                                  className={`px-2 py-1.5 text-xs hover:bg-accent cursor-pointer flex items-center justify-between ${selectedProvider.models.includes(model) ? 'text-muted-foreground' : ''}`}
+                                  onClick={() => {
+                                    if (!selectedProvider.models.includes(model)) {
+                                      updateProvider(selectedProvider.id, { models: [...selectedProvider.models, model] })
+                                      if (capabilities) {
+                                        const currentMetadata = selectedProvider.modelMetadata || {}
+                                        updateProvider(selectedProvider.id, {
+                                          modelMetadata: { ...currentMetadata, [model]: { supportsVision: capabilities.supportsVision, supportsThinking: capabilities.supportsThinking, ...(capabilities.unsupportedParams ? { unsupportedParams: capabilities.unsupportedParams } : {}), ...(capabilities.useReasoningEffort ? { useReasoningEffort: capabilities.useReasoningEffort } : {}) } }
+                                        })
+                                      }
+                                    }
+                                    setModelSearch(''); setSelectedFetchedModel('')
+                                  }}
+                                >
+                                  <span className="truncate flex items-center gap-1">
+                                    {model}
+                                    {capabilities && (
+                                      <>
+                                        {capabilities.supportsVision && <Eye className="size-2.5 text-muted-foreground shrink-0" />}
+                                        {capabilities.supportsThinking && <Lightbulb className="size-2.5 text-muted-foreground shrink-0" />}
+                                      </>
+                                    )}
+                                  </span>
+                                  {selectedProvider.models.includes(model) && <Check className="size-3 shrink-0" />}
+                                </div>
+                              )
+                            })}
+                          {modelSearch && modelSearch !== ' ' && !fetchedModels.some(m => m.toLowerCase() === modelSearch.toLowerCase()) && (
+                            <div className="px-2 py-1.5 text-xs hover:bg-accent cursor-pointer flex items-center justify-between text-primary border-t"
+                              onClick={() => {
+                                if (modelSearch.trim() && !selectedProvider.models.includes(modelSearch.trim())) {
+                                  updateProvider(selectedProvider.id, { models: [...selectedProvider.models, modelSearch.trim()] })
+                                }
+                                setModelSearch(''); setSelectedFetchedModel('')
+                              }}
+                            >
+                              <span className="truncate flex items-center gap-1"><Plus className="size-2.5" />{modelSearch}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+                <Tooltip>
+                  <TooltipTrigger render={(props) => (
+                    <Button {...props} variant="outline" size="icon" className="h-6 w-6 shrink-0 rounded-l-none border-l-0" aria-label={t('fetch')}
+                      onClick={async () => {
+                        if (fetchedModels.length > 0 && !modelSearch && !selectedFetchedModel) {
+                          setModelSearch(' ')
+                        } else {
+                          const apiKey = apiKeys[selectedProvider.id]
+                          if (!apiKey && !selectedProvider.allowEmptyApiKey) { toast.error(t('pleaseSetApiKey')); return }
+                          try {
+                            let apiUrl = selectedProvider.baseUrl
+                            if (selectedProvider.useCorsProxy && uiConfig.corsProxyUrl) {
+                              apiUrl = `${uiConfig.corsProxyUrl}/${selectedProvider.baseUrl}`
+                            }
+                            const headers: Record<string, string> = {}
+                            if (apiKey) { headers['Authorization'] = `Bearer ${apiKey}` }
+                            const response = await fetch(`${apiUrl}/models`, { headers })
+                            if (response.ok) {
+                              const data = await response.json()
+                              let models: string[] = []
+                              const modelMetadata: Record<string, ModelMetadata> = {}
+                              if (data.data && Array.isArray(data.data)) {
+                                models = data.data.map((m: { id: string }) => m.id)
+                                models.forEach((modelId: string) => {
+                                  const matchedKey = Object.keys(MODEL_CAPABILITIES).find(
+                                    key => key === modelId || modelId.includes(key) || key.includes(modelId.split('/')[modelId.split('/').length - 1])
+                                  )
+                                  if (matchedKey) {
+                                    const cap = MODEL_CAPABILITIES[matchedKey]
+                                    modelMetadata[modelId] = { supportsVision: cap.supportsVision, supportsThinking: cap.supportsThinking, ...(cap.unsupportedParams ? { unsupportedParams: cap.unsupportedParams } : {}), ...(cap.useReasoningEffort ? { useReasoningEffort: cap.useReasoningEffort } : {}) }
+                                  }
+                                })
+                              }
+                              setFetchedModels(models)
+                              if (Object.keys(modelMetadata).length > 0) {
+                                updateProvider(selectedProvider.id, { modelMetadata: { ...(selectedProvider.modelMetadata || {}), ...modelMetadata } })
+                              }
+                              if (models.length === 0) { toast.info(t('noModelsFound')) } else { setModelSearch(' ') }
+                            } else {
+                              const errText = await response.text().catch(() => '')
+                              toast.error(`${t('fetchModelsFailed')}${errText ? '\n' + errText : ''}`)
+                            }
+                          } catch (e) { toast.error(`${t('fetchModelListFailed')}\n${e instanceof Error ? e.message : e}`) }
+                        }
+                      }}
+                    >
+                      <CloudDownload className="size-3" />
+                    </Button>
+                  )} />
+                  <TooltipContent side="top" className="text-2xs px-2 py-1">{t('fetch')}</TooltipContent>
+                </Tooltip>
+                </div>
               </div>
               {/* 模型列表（支持拖拽排序） */}
               <div className="flex flex-col gap-0.5">
-                {selectedProvider.models.map((model, i) => (
+                {selectedProvider.models.map((model, i) => {
+                  const isDragOver = dragOverModelIndex === i
+                  const dropLine = isDragOver
+                    ? dragOverModelPos === 'top'
+                      ? 'before:absolute before:inset-x-1 before:-top-0.5 before:h-0 before:border-t-2 before:border-dashed before:border-primary before:z-10'
+                      : 'before:absolute before:inset-x-1 before:-bottom-0.5 before:h-0 before:border-t-2 before:border-dashed before:border-primary before:z-10'
+                    : ''
+                  return (
                   <div key={i} role="listitem"
-                    className="group relative flex items-center gap-2 pl-2 pr-2 hover:pl-4 py-1 rounded hover:bg-accent text-xs transition-all w-full text-left"
+                    className={`group relative flex items-center gap-2 pl-2 pr-2 py-1 rounded hover:bg-accent text-xs transition-all w-full text-left ${dropLine}`}
                     draggable
-                    onDragOver={(e) => { e.preventDefault(); setDragOverModelIndex(i) }}
-                    onDragEnd={() => {
-                      if (draggedModelIndex !== null && dragOverModelIndex !== null) reorderModels(draggedModelIndex, dragOverModelIndex)
-                      setDraggedModelIndex(null); setDragOverModelIndex(null)
-                      if (dragGhostRef.current) { document.body.removeChild(dragGhostRef.current); dragGhostRef.current = null }
-                    }}
                     onDragStart={(e) => {
                       setDraggedModelIndex(i)
                       const ghost = e.currentTarget.cloneNode(true) as HTMLElement
@@ -747,37 +757,51 @@ export function ProviderTab({ onShowPopoverConfirm, configImportInputRef, onEdit
                       e.dataTransfer.setDragImage(ghost, 0, 0)
                       dragGhostRef.current = ghost
                     }}
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      const rect = e.currentTarget.getBoundingClientRect()
+                      setDragOverModelIndex(i)
+                      setDragOverModelPos(e.clientY < rect.top + rect.height / 2 ? 'top' : 'bottom')
+                    }}
+                    onDragLeave={() => { if (dragOverModelIndex === i) setDragOverModelIndex(null) }}
+                    onDragEnd={() => {
+                      if (draggedModelIndex !== null && dragOverModelIndex !== null) reorderModels(draggedModelIndex, dragOverModelIndex)
+                      setDraggedModelIndex(null); setDragOverModelIndex(null)
+                      if (dragGhostRef.current) { document.body.removeChild(dragGhostRef.current); dragGhostRef.current = null }
+                    }}
                   >
-                    <span className="absolute left-0.5 top-1/2 -translate-y-1/2 cursor-grab opacity-0 group-hover:opacity-100 z-10">
-                      <GripVertical className="size-3 text-muted-foreground" />
-                    </span>
                     <div className="min-w-0 flex items-center gap-1 flex-1">
                       <span className="truncate font-mono cursor-pointer">{model}</span>
                       {selectedProvider.modelMetadata?.[model]?.supportsVision && <Eye className="size-2.5 text-muted-foreground shrink-0" />}
-                      {selectedProvider.modelMetadata?.[model]?.supportsThinking && <Brain className="size-2.5 text-muted-foreground shrink-0" />}
+                      {selectedProvider.modelMetadata?.[model]?.supportsThinking && <Lightbulb className="size-2.5 text-muted-foreground shrink-0" />}
                     </div>
-                    <div className="shrink-0 flex items-center gap-0.5">
+                    <div className="flex items-center gap-0.5 shrink-0 invisible group-hover:visible">
                       <Tooltip>
                         <TooltipTrigger render={(props) => (
-                          <Button {...props} size="icon" variant="ghost" className="size-5" onClick={() => onEditModel(model, selectedProvider.id)}>
+                          <Button {...props} size="icon" variant="ghost" className="size-5"
+                            onClick={(e: React.MouseEvent) => { e.stopPropagation(); onEditModel(model, selectedProvider.id) }}
+                            aria-label={t('editModel')}
+                          >
                             <Edit2 className="size-3" />
                           </Button>
                         )} />
-                        <TooltipContent side="top" className="text-2xs px-2 py-1">{t('editModel')}</TooltipContent>
+                        <TooltipContent side="bottom">{t('editModel')}</TooltipContent>
                       </Tooltip>
                       <Tooltip>
                         <TooltipTrigger render={(props) => (
-                          <Button {...props} size="icon" variant="ghost" className="size-5 hover:text-destructive"
+                          <Button {...props} size="icon" variant="ghost" className="size-5"
                             onClick={(e: React.MouseEvent) => onShowPopoverConfirm(e.clientX, e.clientY + POPOVER_OFFSET, () => updateProvider(selectedProvider.id, { models: selectedProvider.models.filter((_, j) => j !== i) }))}
+                            aria-label={t('removeModel')}
                           >
-                            <X className="size-3" />
+                            <X className="size-3 text-destructive" />
                           </Button>
                         )} />
-                        <TooltipContent side="top" className="text-2xs px-2 py-1">{t('removeModel')}</TooltipContent>
+                        <TooltipContent side="bottom">{t('removeModel')}</TooltipContent>
                       </Tooltip>
                     </div>
                   </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           </div>

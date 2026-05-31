@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo, memo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism'
@@ -68,11 +68,21 @@ interface CodeBlockProps {
   fontSize?: string
 }
 
-export function CodeBlock({ language, children, autoCollapse = false, fontSize = '0.75rem' }: CodeBlockProps) {
+const LINE_LIMIT = 100
+
+export const CodeBlock = memo(function CodeBlock({ language, children, autoCollapse = false, fontSize = '0.75rem' }: CodeBlockProps) {
   const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
   const [collapsed, setCollapsed] = useState(autoCollapse)
   const [wrap, setWrap] = useState(false)
+  const [showAll, setShowAll] = useState(false)
+
+  const lineCount = useMemo(() => children.split('\n').length, [children])
+  const isLong = lineCount > LINE_LIMIT
+  const displayCode = useMemo(() => {
+    if (!isLong || showAll) return children
+    return children.split('\n').slice(0, LINE_LIMIT).join('\n')
+  }, [children, isLong, showAll])
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(children)
@@ -81,13 +91,13 @@ export function CodeBlock({ language, children, autoCollapse = false, fontSize =
   }
 
   return (
-    <div className="relative group rounded-md overflow-hidden bg-codeBackground border">
-      <div className="flex items-center justify-between px-2 py-1 bg-toolbar-bg border-b">
+    <div className="relative group rounded-md overflow-hidden bg-codeBackground">
+      <div className="flex items-center justify-between px-2 py-1 bg-codeBackground">
         <span className="text-2xs text-muted-foreground font-mono">{language}</span>
         <div className="flex items-center gap-0.5">
           <Tooltip>
             <TooltipTrigger render={(props) => (
-              <Button {...props} size="icon" variant="ghost" className="size-5 text-toolbar-text hover:text-foreground hover:bg-toolbar-hover" onClick={() => setWrap(!wrap)}>
+              <Button {...props} size="icon" variant="ghost" className="size-5 text-toolbar-text hover:text-foreground hover:bg-toolbar-hover" onClick={() => setWrap(!wrap)} aria-label={wrap ? t('unwrap') : t('autoWrap')}>
                 <WrapText className="size-3" />
               </Button>
             )} />
@@ -95,7 +105,7 @@ export function CodeBlock({ language, children, autoCollapse = false, fontSize =
           </Tooltip>
           <Tooltip>
             <TooltipTrigger render={(props) => (
-              <Button {...props} size="icon" variant="ghost" className="size-5 text-toolbar-text hover:text-foreground hover:bg-toolbar-hover" onClick={handleCopy}>
+              <Button {...props} size="icon" variant="ghost" className="size-5 text-toolbar-text hover:text-foreground hover:bg-toolbar-hover" onClick={handleCopy} aria-label={t('copy')}>
                 {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
               </Button>
             )} />
@@ -103,7 +113,7 @@ export function CodeBlock({ language, children, autoCollapse = false, fontSize =
           </Tooltip>
           <Tooltip>
             <TooltipTrigger render={(props) => (
-              <Button {...props} size="icon" variant="ghost" className="size-5 text-toolbar-text hover:text-foreground hover:bg-toolbar-hover" onClick={() => setCollapsed(!collapsed)}>
+              <Button {...props} size="icon" variant="ghost" className="size-5 text-toolbar-text hover:text-foreground hover:bg-toolbar-hover" onClick={() => setCollapsed(!collapsed)} aria-label={collapsed ? t('expand') : t('collapse')}>
                 {collapsed ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
               </Button>
             )} />
@@ -129,10 +139,18 @@ export function CodeBlock({ language, children, autoCollapse = false, fontSize =
             }}
             wrapLongLines={wrap}
           >
-            {children}
+            {displayCode}
           </SyntaxHighlighter>
+          {isLong && !showAll && (
+            <button
+              onClick={() => setShowAll(true)}
+              className="w-full py-1.5 text-2xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors border-t"
+            >
+              {t('showAllLines', { count: lineCount })}
+            </button>
+          )}
         </div>
       )}
     </div>
   )
-}
+})

@@ -8,31 +8,46 @@ export interface ConfirmDialogProps {
   message: string
   onOpenChange: (open: boolean) => void
   onConfirm: () => void
+  thirdLabel?: string
+  onThirdAction?: () => void
 }
 
-export function ConfirmDialog({ open, title, message, onOpenChange, onConfirm }: ConfirmDialogProps) {
+export function ConfirmDialog({ open, title, message, onOpenChange, onConfirm, thirdLabel, onThirdAction }: ConfirmDialogProps) {
   const { t } = useTranslation()
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm p-0">
-        <DialogHeader className="px-4 pt-4 pb-2">
-          <DialogTitle className="text-sm">{title}</DialogTitle>
+      <DialogContent className="max-w-xs p-0 gap-0">
+        <DialogHeader className="px-3 pt-3 pb-0">
+          <DialogTitle className="text-xs">{title}</DialogTitle>
         </DialogHeader>
-        <div className="px-4 py-3 text-xs whitespace-pre-line">
+        <div className="px-3 py-2 text-2xs text-muted-foreground">
           {message}
         </div>
-        <DialogFooter className="px-4 py-3 border-t">
+        <DialogFooter className="px-3 py-2 border-t">
           <Button
             variant="outline"
             size="sm"
-            className="h-7 text-xs"
+            className="h-6 text-2xs"
             onClick={() => onOpenChange(false)}
           >
             {t('cancel')}
           </Button>
+          {thirdLabel && onThirdAction && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 text-2xs"
+              onClick={() => {
+                onThirdAction()
+                onOpenChange(false)
+              }}
+            >
+              {thirdLabel}
+            </Button>
+          )}
           <Button
             size="sm"
-            className="h-7 text-xs"
+            className="h-6 text-2xs"
             onClick={() => {
               onConfirm()
               onOpenChange(false)

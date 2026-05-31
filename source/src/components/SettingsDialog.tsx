@@ -11,10 +11,12 @@ import { ProviderTab } from './settings/ProviderTab'
 import { ModelParamsTab, type ModelParamsTabHandle } from './settings/ModelParamsTab'
 import { PromptsTab } from './settings/PromptsTab'
 import { HashTab } from './settings/HashTab'
-import { X, Settings, Cpu, Sliders, SwatchBook, ChevronLeft, Hash } from 'lucide-react'
+import { ChatManagementTab } from './settings/ChatManagementTab'
+import { X, Settings, Cpu, Sliders, SwatchBook, ChevronLeft, Hash, MessageSquare } from 'lucide-react'
 
 const TABS = [
   { key: 'general', icon: Settings, labelKey: 'generalSettings' },
+  { key: 'chat', icon: MessageSquare, labelKey: 'chatSettings' },
   { key: 'api', icon: Cpu, labelKey: 'modelService' },
   { key: 'model', icon: Sliders, labelKey: 'modelParams' },
   { key: 'prompts', icon: SwatchBook, labelKey: 'prompts' },
@@ -98,7 +100,7 @@ export function SettingsDialog({
             <div className="h-8 border-b flex items-center justify-between px-2 shrink-0">
               <div className="flex items-center gap-1">
                 {!mobileHome && (
-                  <Button size="icon" variant="ghost" className="size-6 md:hidden" onClick={() => setMobileHome(true)}>
+                  <Button size="icon" variant="ghost" className="size-6 md:hidden" onClick={() => setMobileHome(true)} aria-label={t('back')}>
                     <ChevronLeft data-icon className="size-3" />
                   </Button>
                 )}
@@ -106,7 +108,7 @@ export function SettingsDialog({
               </div>
               <Tooltip>
                 <TooltipTrigger render={(props) => (
-                  <Button {...props} size="icon" variant="ghost" className="size-6" onClick={handleClose}>
+                  <Button {...props} size="icon" variant="ghost" className="size-6" onClick={handleClose} aria-label={t('close')}>
                     <X className="size-3" />
                   </Button>
                 )} />
@@ -154,6 +156,10 @@ export function SettingsDialog({
                   />
                 )}
 
+                {settingsTab === 'chat' && (
+                  <ChatManagementTab onShowConfirm={onShowConfirm} onClose={handleClose} />
+                )}
+
                 {settingsTab === 'api' && (
                   <ProviderTab
                     onShowPopoverConfirm={onShowPopoverConfirm}
@@ -177,6 +183,7 @@ export function SettingsDialog({
                 {settingsTab === 'hash' && (
                   <HashTab />
                 )}
+
               </div>
             </div>
           </div>
